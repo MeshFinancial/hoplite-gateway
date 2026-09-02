@@ -1,0 +1,7 @@
+venv/
+__pycache__/
+*.pyc
+*.log
+server.py.bak
+data/store.json
+autoreg.py

@@ -1,0 +1,15 @@
+[Unit]
+Description=Hoplite Unified Proxy Gateway
+After=network.target
+
+[Service]
+Type=simple
+User=nikita
+WorkingDirectory=/tmp/hoplite-gateway
+ExecStart=/tmp/hoplite-gateway/venv/bin/python3 -m uvicorn server:app --host 0.0.0.0 --port 8090
+Restart=always
+RestartSec=5
+Environment=PYTHONUNBUFFERED=1
+
+[Install]
+WantedBy=multi-user.target

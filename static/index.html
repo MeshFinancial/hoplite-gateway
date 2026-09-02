@@ -1,0 +1,415 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Hoplite Gateway</title>
+<style>
+  :root {
+    --bg: #0d1117;
+    --surface: #161b22;
+    --border: #30363d;
+    --text: #c9d1d9;
+    --muted: #8b949e;
+    --green: #3fb950;
+    --red: #f85149;
+    --amber: #d29922;
+    --blue: #58a6ff;
+    --accent: #1f6feb;
+    --radius: 8px;
+    --font: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+  }
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--font);
+    line-height: 1.5;
+    min-height: 100vh;
+  }
+  header {
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    padding: 16px 24px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    position: sticky;
+    top: 0;
+    z-index: 10;
+  }
+  header h1 { font-size: 1.25rem; font-weight: 600; }
+  .status-dot {
+    display: inline-block;
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    margin-right: 8px;
+    background: var(--red);
+    transition: background .3s;
+  }
+  .status-dot.live { background: var(--green); }
+  main { max-width: 1200px; margin: 0 auto; padding: 24px; }
+  .stats-row {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 16px;
+    margin-bottom: 24px;
+  }
+  .stat-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 16px;
+  }
+  .stat-card .label { font-size: .8rem; color: var(--muted); text-transform: uppercase; letter-spacing: .05em; }
+  .stat-card .value { font-size: 1.5rem; font-weight: 700; margin-top: 4px; }
+  .stat-card .value.green { color: var(--green); }
+  .stat-card .value.red { color: var(--red); }
+  .panel {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    margin-bottom: 24px;
+    overflow: hidden;
+  }
+  .panel-header {
+    padding: 14px 20px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    font-weight: 600;
+    font-size: .95rem;
+  }
+  .panel-body { padding: 16px 20px; }
+  table { width: 100%; border-collapse: collapse; }
+  th, td { text-align: left; padding: 10px 12px; border-bottom: 1px solid var(--border); font-size: .9rem; }
+  th { color: var(--muted); font-weight: 500; text-transform: uppercase; font-size: .75rem; letter-spacing: .05em; }
+  tr:last-child td { border-bottom: none; }
+  .badge {
+    display: inline-block;
+    padding: 2px 10px;
+    border-radius: 12px;
+    font-size: .75rem;
+    font-weight: 600;
+  }
+  .badge.live { background: rgba(63, 185, 80, .15); color: var(--green); }
+  .badge.dead { background: rgba(248, 81, 73, .15); color: var(--red); }
+  .badge.untested { background: rgba(210, 153, 34, .15); color: var(--amber); }
+  .credits-bar {
+    height: 6px;
+    background: #21262d;
+    border-radius: 3px;
+    overflow: hidden;
+    margin-top: 4px;
+    width: 120px;
+  }
+  .credits-bar .fill {
+    height: 100%;
+    background: var(--blue);
+    border-radius: 3px;
+    transition: width .3s;
+  }
+  button, .btn {
+    background: var(--accent);
+    color: #fff;
+    border: 1px solid var(--accent);
+    border-radius: 6px;
+    padding: 6px 14px;
+    font-size: .8rem;
+    cursor: pointer;
+    transition: opacity .2s;
+  }
+  button:hover { opacity: .85; }
+  button.danger { background: transparent; border-color: var(--red); color: var(--red); }
+  button.danger:hover { background: rgba(248, 81, 73, .1); }
+  button.small { padding: 4px 10px; font-size: .75rem; }
+  input, select {
+    background: #0d1117;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 8px 12px;
+    color: var(--text);
+    font-size: .85rem;
+    width: 100%;
+  }
+  input:focus { outline: none; border-color: var(--accent); }
+  .form-row { display: flex; gap: 10px; margin-bottom: 10px; }
+  .form-row input { flex: 1; }
+  .log-list {
+    max-height: 280px;
+    overflow-y: auto;
+    font-family: "SF Mono", "Fira Code", monospace;
+    font-size: .8rem;
+  }
+  .log-entry { padding: 4px 0; border-bottom: 1px solid rgba(48, 54, 61, .5); }
+  .log-entry .time { color: var(--muted); margin-right: 8px; }
+  .log-entry .event { color: var(--amber); }
+  .settings-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .settings-grid label { font-size: .8rem; color: var(--muted); }
+  .empty-state { color: var(--muted); text-align: center; padding: 32px; font-style: italic; }
+  .flex-between { display: flex; align-items: center; gap: 8px; }
+  .mono-key { font-family: "SF Mono", "Fira Code", monospace; font-size: .8rem; color: var(--muted); }
+  .row-actions { display: flex; gap: 6px; }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="flex-between">
+    <span id="statusDot" class="status-dot"></span>
+    <h1>Hoplite Gateway</h1>
+  </div>
+  <div id="headerTime" style="font-size:.8rem;color:var(--muted)"></div>
+</header>
+
+<main>
+  <!-- Stats row -->
+  <div class="stats-row">
+    <div class="stat-card"><div class="label">Total Keys</div><div class="value" id="statTotal">0</div></div>
+    <div class="stat-card"><div class="label">Live Keys</div><div class="value green" id="statLive">0</div></div>
+    <div class="stat-card"><div class="label">Dead Keys</div><div class="value red" id="statDead">0</div></div>
+    <div class="stat-card"><div class="label">Remaining Credits</div><div class="value" id="statCredits">0</div></div>
+  </div>
+
+  <!-- Key Management -->
+  <div class="panel">
+    <div class="panel-header"><span>&#128273; API Keys</span></div>
+    <div class="panel-body">
+      <div class="form-row">
+        <input id="keyLabel" placeholder="Label (e.g. MyKey)" maxlength="64">
+        <input id="keyValue" placeholder="hop_…" maxlength="256">
+        <button id="btnAddKey" style="flex-shrink:0">Add Key</button>
+      </div>
+      <div id="keysContainer">
+        <div class="empty-state">No keys. Add one above.</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Settings -->
+  <div class="panel">
+    <div class="panel-header"><span>&#9881; Settings</span></div>
+    <div class="panel-body">
+      <div class="settings-grid">
+        <div>
+          <label>Rotation</label>
+          <select id="settingRotation">
+            <option value="round_robin">Round Robin</option>
+            <option value="random">Random</option>
+          </select>
+        </div>
+        <div>
+          <label>Health Check Interval (seconds)</label>
+          <input id="settingInterval" type="number" min="10" max="3600" value="60">
+        </div>
+      </div>
+      <button id="btnSaveSettings" style="margin-top:12px">Save Settings</button>
+    </div>
+  </div>
+
+  <!-- Cards -->
+  <div class="panel">
+    <div class="panel-header"><span>&#128179; Cards</span></div>
+    <div class="panel-body">
+      <div id="cardsContainer">
+        <div class="empty-state">Loading cards…</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- GitHub Accounts -->
+  <div class="panel">
+    <div class="panel-header"><span>&#128187; GitHub Accounts</span></div>
+    <div class="panel-body">
+      <div id="githubContainer">
+        <div class="empty-state">Loading accounts…</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Event Log -->
+  <div class="panel">
+    <div class="panel-header"><span>&#128221; Event Log</span><span style="font-size:.75rem;color:var(--muted)">SSE</span></div>
+    <div class="panel-body log-list" id="logList">
+      <div class="empty-state">Waiting for events…</div>
+    </div>
+  </div>
+</main>
+
+<script>
+const API = '';
+
+function fmtTime() {
+  return new Date().toLocaleTimeString('en-US', { hour12: false });
+}
+
+// --- SSE ---
+const evtSource = new EventSource('/api/events');
+evtSource.addEventListener('stats', e => renderStats(JSON.parse(e.data)));
+evtSource.addEventListener('key_added', e => { loadKeys(); addLog('key_added', e.data); });
+evtSource.addEventListener('key_removed', e => { loadKeys(); addLog('key_removed', e.data); });
+evtSource.addEventListener('key_dead', e => { loadKeys(); addLog('key_dead', e.data); });
+evtSource.addEventListener('key_tested', e => { loadKeys(); addLog('key_tested', e.data); });
+evtSource.addEventListener('key_status_change', e => { loadKeys(); addLog('key_status_change', e.data); });
+evtSource.addEventListener('status', e => addLog('status', e.data));
+evtSource.addEventListener('settings_updated', e => loadSettings());
+evtSource.onerror = () => addLog('error', { text: 'SSE connection lost — retrying…' });
+
+function addLog(event, raw) {
+  const list = document.getElementById('logList');
+  if (list.querySelector('.empty-state')) list.innerHTML = '';
+  const div = document.createElement('div');
+  div.className = 'log-entry';
+  const data = typeof raw === 'string' ? JSON.parse(raw) : raw;
+  div.innerHTML = `<span class="time">${fmtTime()}</span><span class="event">${event}</span> ${JSON.stringify(data).slice(0, 120)}`;
+  list.prepend(div);
+  if (list.children.length > 100) list.lastChild.remove();
+}
+
+// --- Stats ---
+function renderStats(s) {
+  document.getElementById('statTotal').textContent = s.keys_total ?? 0;
+  document.getElementById('statLive').textContent = s.keys_live ?? 0;
+  document.getElementById('statDead').textContent = s.keys_dead ?? 0;
+  const rem = (s.total_credits ?? 0) - (s.used_credits ?? 0);
+  document.getElementById('statCredits').textContent = rem.toFixed(2);
+  const dot = document.getElementById('statusDot');
+  dot.className = 'status-dot' + ((s.keys_live > 0) ? ' live' : '');
+}
+
+// --- Keys ---
+async function loadKeys() {
+  const resp = await fetch('/api/keys');
+  const keys = await resp.json();
+  const container = document.getElementById('keysContainer');
+  if (!keys.length) {
+    container.innerHTML = '<div class="empty-state">No keys. Add one above.</div>';
+    return;
+  }
+  let html = '<table><thead><tr><th>Label</th><th>Key</th><th>Status</th><th>Credits</th><th>Actions</th></tr></thead><tbody>';
+  for (const k of keys) {
+    const used = k.credits_used ?? 0;
+    const total = k.credits_total ?? 0;
+    const pct = total > 0 ? Math.min(100, (used / total) * 100) : 0;
+    html += `<tr>
+      <td><strong>${esc(k.label)}</strong></td>
+      <td class="mono-key">${esc(k.key)}</td>
+      <td><span class="badge ${k.status}">${k.status}</span></td>
+      <td>
+        ${total > 0 ? used.toFixed(2) + ' / ' + total : '—'}
+        ${total > 0 ? '<div class="credits-bar"><div class="fill" style="width:' + pct + '%"></div></div>' : ''}
+      </td>
+      <td class="row-actions">
+        <button class="small" onclick="testKey('${esc(k.id)}')">Test</button>
+        <button class="small danger" onclick="deleteKey('${esc(k.id)}')">Remove</button>
+      </td></tr>`;
+  }
+  html += '</tbody></table>';
+  container.innerHTML = html;
+}
+
+async function testKey(id) {
+  const resp = await fetch('/api/keys/' + id + '/test', { method: 'POST' });
+  const data = await resp.json();
+  addLog('key_tested', data);
+  loadKeys();
+  loadStats();
+}
+
+async function deleteKey(id) {
+  if (!confirm('Delete key ' + id + '?')) return;
+  await fetch('/api/keys/' + id, { method: 'DELETE' });
+  loadKeys();
+  loadStats();
+}
+
+document.getElementById('btnAddKey').onclick = async () => {
+  const label = document.getElementById('keyLabel').value.trim();
+  const key = document.getElementById('keyValue').value.trim();
+  if (!label || !key) return alert('Label and key are required');
+  const resp = await fetch('/api/keys', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ label, key }),
+  });
+  if (!resp.ok) { alert('Failed: ' + (await resp.text())); return; }
+  document.getElementById('keyLabel').value = '';
+  document.getElementById('keyValue').value = '';
+  loadKeys();
+  loadStats();
+};
+
+// --- Settings ---
+async function loadSettings() {
+  const resp = await fetch('/api/settings');
+  const s = await resp.json();
+  document.getElementById('settingRotation').value = s.rotation || 'round_robin';
+  document.getElementById('settingInterval').value = s.health_check_interval || 60;
+}
+
+document.getElementById('btnSaveSettings').onclick = async () => {
+  const body = {
+    rotation: document.getElementById('settingRotation').value,
+    health_check_interval: parseInt(document.getElementById('settingInterval').value, 10),
+  };
+  await fetch('/api/settings', {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+  addLog('settings_updated', body);
+};
+
+async function loadStats() {
+  const resp = await fetch('/api/stats');
+  renderStats(await resp.json());
+}
+
+function esc(s) { return (s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+
+// --- Cards ---
+async function loadCards() {
+  const resp = await fetch('/api/cards');
+  const cards = await resp.json();
+  const container = document.getElementById('cardsContainer');
+  if (!cards.length) {
+    container.innerHTML = '<div class="empty-state">No cards</div>';
+    return;
+  }
+  let html = '<table><thead><tr><th>Number</th><th>Exp</th><th>Bank</th><th>Status</th></tr></thead><tbody>';
+  for (const c of cards) {
+    html += '<tr>\n      <td class="mono-key">' + esc(c.number) + '</td>\n      <td>' + esc(c.exp) + '</td>\n      <td>' + esc(c.bank) + '</td>\n      <td><span class="badge ' + c.status + '">' + c.status + '</span></td>\n    </tr>';
+  }
+  html += '</tbody></table>';
+  container.innerHTML = html;
+}
+
+// --- GitHub ---
+async function loadGithub() {
+  const resp = await fetch('/api/github');
+  const accounts = await resp.json();
+  const container = document.getElementById('githubContainer');
+  if (!accounts.length) {
+    container.innerHTML = '<div class="empty-state">No accounts</div>';
+    return;
+  }
+  let html = '<table><thead><tr><th>Email</th><th>Login</th><th>Status</th></tr></thead><tbody>';
+  for (const a of accounts) {
+    html += '<tr>\n      <td>' + esc(a.email) + '</td>\n      <td><strong>' + esc(a.login) + '</strong></td>\n      <td><span class="badge ' + a.status + '">' + a.status + '</span></td>\n    </tr>';
+  }
+  html += '</tbody></table>';
+  container.innerHTML = html;
+}
+
+// --- Init ---
+loadKeys();
+loadStats();
+loadSettings();
+loadCards();
+loadGithub();
+setInterval(() => { document.getElementById('headerTime').textContent = fmtTime(); }, 1000);
+</script>
+</body>
+</html>
