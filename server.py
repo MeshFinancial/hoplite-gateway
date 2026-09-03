@@ -4,6 +4,7 @@
 import asyncio
 import json
 import time
+import uuid
 import os
 import logging
 from datetime import datetime, timezone
@@ -26,6 +27,7 @@ DATA_DIR = Path(__file__).parent / "data"
 STATIC_DIR = Path(__file__).parent / "static"
 STORE_PATH = DATA_DIR / "store.json"
 HOPLITE_API = "https://api.hoplite.sh"
+PROJECT_ID = "proj_eec8a38028764dd3a00ed16ce02d0f5b"  # From existing proxy
 
 # ---------------------------------------------------------------------------
 # Store management (single lock for read-modify-write safety)
@@ -105,22 +107,22 @@ async def get_live_key() -> dict:
 
 
 async def test_key(api_key: str) -> dict:
-    """Quick liveness probe via /v1/models with retries. Returns {alive, models, error}."""
+    """Quick liveness probe via /api/model-providers with retries."""
     last_error = None
     for attempt in range(3):
         try:
-            async with httpx.AsyncClient(timeout=30) as client:  # 30s timeout per attempt
+            async with httpx.AsyncClient(timeout=30) as client:
                 resp = await client.get(
-                    f"{HOPLITE_API}/v1/models",
-                    headers={"Authorization": f"Bearer {api_key}"}
+                    f"{HOPLITE_API}/api/model-providers",
+                    headers={"X-Api-Key": api_key},
                 )
                 if resp.status_code == 200:
                     data = resp.json()
-                    models = len(data.get("data", [])) if isinstance(data, dict) else 0
+                    models = len(data.get("models", [])) if isinstance(data, dict) else 0
                     return {"alive": True, "models": models, "error": None}
                 if resp.status_code == 429:
                     last_error = f"rate_limited_{resp.status_code}"
-                    await asyncio.sleep(2 ** attempt)  # Exponential backoff
+                    await asyncio.sleep(2 ** attempt)
                     continue
                 last_error = f"HTTP_{resp.status_code}"
         except (HttpxTimeoutException, httpx.ConnectError, httpx.ReadError) as exc:
@@ -131,6 +133,18 @@ async def test_key(api_key: str) -> dict:
             await asyncio.sleep(2 ** attempt)
 
     return {"alive": False, "models": 0, "error": last_error}
+
+
+async def mark_key_dead(key: dict, error: str):
+    async with _store_lock:
+        store = load_store()
+        for k in store["keys"]:
+            if k["id"] == key["id"]:
+                k["status"] = "dead"
+                k["last_checked"] = datetime.now(timezone.utc).isoformat()
+        save_store(store)
+    bus.publish("key_dead", {"label": key["label"], "error": error})
+    logger.warning("Key %s marked dead: %s", key["label"], error)
 
 
 # ---------------------------------------------------------------------------
@@ -166,22 +180,25 @@ def health():
 @app.get("/v1/models")
 async def proxy_models():
     key = await get_live_key()
-    async with httpx.AsyncClient(timeout=httpx.Timeout(30.0)) as client:
+    async with httpx.AsyncClient(timeout=30) as client:
         resp = await client.get(
-            f"{HOPLITE_API}/v1/models",
-            headers={"Authorization": f"Bearer {key['key']}"},
+            f"{HOPLITE_API}/api/model-providers",
+            headers={"X-Api-Key": key["key"]},
         )
-        if resp.status_code != 200:
-            async with _store_lock:
-                store = load_store()
-                for k in store["keys"]:
-                    if k["id"] == key["id"]:
-                        k["status"] = "dead"
-                        k["last_checked"] = datetime.now(timezone.utc).isoformat()
-                save_store(store)
-            bus.publish("key_dead", {"label": key["label"], "error": f"HTTP {resp.status_code}"})
-            raise HTTPException(status_code=502, detail=f"Upstream error: {resp.status_code}")
-        return resp.json()
+        if resp.status_code not in (200, 201):
+            await mark_key_dead(key, f"HTTP {resp.status_code}")
+            raise HTTPException(502, f"Upstream error: {resp.status_code}")
+
+        data = resp.json()
+        models_list = []
+        for m in data.get("models", []):
+            models_list.append({
+                "id": m["id"],
+                "object": "model",
+                "created": int(time.time()),
+                "owned_by": m.get("provider", "hoplite"),
+            })
+        return {"object": "list", "data": models_list}
 
 
 # ---------------------------------------------------------------------------
@@ -198,46 +215,88 @@ class ChatRequest(BaseModel):
 @app.post("/v1/chat/completions")
 async def proxy_chat(body: ChatRequest):
     key = await get_live_key()
-    payload = body.model_dump(exclude_none=True)
+    model = body.model or "claude-haiku-4-5"
+    prompt = "\n".join(f"{m['role']}: {m.get('content', '')}" for m in body.messages)
+
+    async with httpx.AsyncClient(timeout=30) as client:
+        # Create thread
+        tid = f"gw_{uuid.uuid4().hex[:8]}"
+        resp = await client.post(
+            f"{HOPLITE_API}/api/threads",
+            headers={"X-Api-Key": key["key"], "Content-Type": "application/json"},
+            json={
+                "projectId": PROJECT_ID,
+                "title": f"Gateway: {tid}",
+                "prompt": prompt,
+                "model": model,
+            },
+        )
+
+        if resp.status_code not in (200, 201):
+            if resp.status_code in (401, 403):
+                await mark_key_dead(key, f"HTTP {resp.status_code}")
+            raise HTTPException(502, f"Thread creation failed: {resp.status_code}")
+
+        result = resp.json()
+        thread_id = result.get("thread", {}).get("id")
+        if not thread_id:
+            raise HTTPException(502, "No thread ID in response")
+
+        # Poll for completion
+        content = ""
+        for _ in range(60):
+            await asyncio.sleep(2)
+            poll_resp = await client.get(
+                f"{HOPLITE_API}/api/threads/{thread_id}",
+                headers={"X-Api-Key": key["key"]},
+            )
+            if poll_resp.status_code != 200:
+                continue
+            tdata = poll_resp.json()
+            status = tdata.get("thread", {}).get("status")
+            if status in ("ready", "failed"):
+                msgs_resp = await client.get(
+                    f"{HOPLITE_API}/api/threads/{thread_id}/messages",
+                    headers={"X-Api-Key": key["key"]},
+                )
+                if msgs_resp.status_code == 200:
+                    msgs = msgs_resp.json().get("messages", [])
+                    for msg in reversed(msgs):
+                        if msg.get("role") == "assistant" and msg.get("content"):
+                            content = msg.get("content", "")
+                            break
+                break
 
     if body.stream:
         async def stream_gen():
-            async with httpx.AsyncClient(timeout=httpx.Timeout(300.0)) as client:
-                async with client.stream(
-                    "POST",
-                    f"{HOPLITE_API}/v1/chat/completions",
-                    headers={
-                        "Authorization": f"Bearer {key['key']}",
-                        "Content-Type": "application/json",
-                    },
-                    json=payload,
-                ) as resp:
-                    if resp.status_code != 200:
-                        yield f'data: {{"error":"Upstream {resp.status_code}"}}\n\n'
-                        return
-                    async for chunk in resp.aiter_bytes():
-                        yield chunk.decode("utf-8", errors="replace")
+            if content:
+                chunk = {
+                    "id": f"chatcmpl-{tid}",
+                    "object": "chat.completion.chunk",
+                    "created": int(time.time()),
+                    "model": model,
+                    "choices": [{
+                        "index": 0,
+                        "delta": {"role": "assistant", "content": content},
+                        "finish_reason": "stop",
+                    }],
+                }
+                yield f"data: {json.dumps(chunk)}\n\n"
+            yield "data: [DONE]\n\n"
         return StreamingResponse(stream_gen(), media_type="text/event-stream")
 
-    async with httpx.AsyncClient(timeout=httpx.Timeout(300.0)) as client:
-        resp = await client.post(
-            f"{HOPLITE_API}/v1/chat/completions",
-            headers={
-                "Authorization": f"Bearer {key['key']}",
-                "Content-Type": "application/json",
-            },
-            json=payload,
-        )
-        if resp.status_code in (401, 403):
-            async with _store_lock:
-                store = load_store()
-                for k in store["keys"]:
-                    if k["id"] == key["id"]:
-                        k["status"] = "dead"
-                        k["last_checked"] = datetime.now(timezone.utc).isoformat()
-                save_store(store)
-            bus.publish("key_dead", {"label": key["label"], "error": f"HTTP {resp.status_code}"})
-        return JSONResponse(content=resp.json(), status_code=resp.status_code)
+    return JSONResponse(content={
+        "id": f"chatcmpl-{tid}",
+        "object": "chat.completion",
+        "created": int(time.time()),
+        "model": model,
+        "choices": [{
+            "index": 0,
+            "message": {"role": "assistant", "content": content},
+            "finish_reason": "stop",
+        }],
+        "usage": {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0},
+    })
 
 
 # ---------------------------------------------------------------------------
@@ -248,7 +307,7 @@ def list_keys():
     keys = load_store()["keys"]
     # Mask keys in the response
     return [
-        {**k, "key": mask_key(k["key"]), "key_full": k["key"]}
+        {**{kk: vv for kk, vv in k.items() if kk != "key"}, "key": mask_key(k["key"])}
         for k in keys
     ]
 
@@ -265,7 +324,7 @@ def add_key(key_data: dict):
     store["keys"].append(key_data)
     save_store(store)
     bus.publish("key_added", {"label": key_data.get("label", key_data["id"])})
-    return {**key_data, "key": mask_key(key_data["key"]), "key_full": key_data["key"]}
+    return {**key_data, "key": mask_key(key_data["key"])}
 
 
 @app.delete("/api/keys/{key_id}")
