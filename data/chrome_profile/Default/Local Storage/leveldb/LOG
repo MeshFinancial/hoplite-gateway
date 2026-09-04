@@ -1,0 +1,5 @@
+2026/09/04-12:27:41.617 70bc Reusing MANIFEST C:\Users\User\tmp\hoplite-gateway\data\chrome_profile\Default\Local Storage\leveldb/MANIFEST-000001
+2026/09/04-12:27:41.620 70bc Recovering log #3
+2026/09/04-12:27:41.620 70bc Level-0 table #3: started
+2026/09/04-12:27:41.624 70bc Level-0 table #3: 27522 bytes OK
+2026/09/04-12:27:41.627 70bc Delete type=0 #3

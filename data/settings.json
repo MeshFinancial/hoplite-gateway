@@ -1,0 +1,28 @@
+{
+  "card": {
+    "number": "4874100085748500",
+    "expiry": "05/30",
+    "cvv": "674",
+    "zip": "10001",
+    "country": "US"
+  },
+  "captcha": {
+    "provider": "anticaptcha",
+    "key": "03ea83a89c837abf30695d43a93c0f29",
+    "balance": 51.91978,
+    "fallback_key": "73531525aa745ed8fd1b4be8c6181c8d"
+  },
+  "proxies": [],
+  "proxy_strategy": "round-robin",
+  "gateway": {
+    "port": 8085,
+    "auth_key": "sk-hoplite-gateway",
+    "default_model": "claude-sonnet-5",
+    "max_concurrent": 5
+  },
+  "autoreg": {
+    "headless": true,
+    "batch_size": 5,
+    "use_chrome": true
+  }
+}

@@ -1,0 +1,24 @@
+[
+  {
+    "login": "Violetpivary",
+    "email": "elenamlfkux606@gmail.com",
+    "api_key": "hop_XFFllnvNALfUgPUtTIwrBYYHpBHmMFPvUKpADmscKCfgLPAZtHJQNJbPndXJlkdO",
+    "project_id": "proj_987ba1381ceb434189e9284bb7fad492",
+    "org_id": "org_92f558a193f14b30b678215a048b0766",
+    "user_id": "Ny3waqobpZNQGEFDlJcVuHDHlrta7X40",
+    "cookies": {
+      "hoplite_plan_intent": "free%3Amonthly",
+      "_vid_t": "QtLf57QsAap8geBUNxLMBcpqPZPWUA4N3lsc+rXC9sQdPqsOVWr6r5mgmCVB/Y6CT/FnHeKEzEqtJ299Uh5mOWA=",
+      "__Secure-better-auth.session_token": "jZ6DmFKeQZa6u0bk9eBO3DhlQBFzXsqh.Bo3iGzXGWKYBiUKHYFo16%2FpwpYH2rAEa4V4AerNws58%3D",
+      "ph_phc_oK8Rc2tarw5mWhTxTLPtMGtQr89yxrfTExuNchDgSmkZ_posthog": "%7B%22%24device_id%22%3A%2201a06b9b-a99d-70ec-85bd-afa4e64bcf8d%22%2C%22distinct_id%22%3A%22Ny3waqobpZNQGEFDlJcVuHDHlrta7X40%22%2C%22%24sesid%22%3A%5B1788511768364%2C%2201a06b9b-a9c5-7940-aacc-ccd3f96500c6%22%2C1788511758778%5D%2C%22%24epp%22%3Atrue%2C%22%24initial_person_info%22%3A%7B%22r%22%3A%22%24direct%22%2C%22u%22%3A%22https%3A%2F%2Fapp.hoplite.sh%2Flogin%3Fplan%3Dfree%26interval%3Dmonthly%22%7D%2C%22%24user_state%22%3A%22identified%22%7D"
+    },
+    "sandbox_info": {
+      "sandboxes": [],
+      "preview_urls": [],
+      "thread_runners": [],
+      "active_servers": []
+    },
+    "created_at": "2026-09-04T08:49:38Z",
+    "status": "ok"
+  }
+]

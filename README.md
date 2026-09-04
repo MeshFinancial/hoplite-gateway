@@ -1,67 +1,17 @@
-# Hoplite Unified Proxy Gateway
+# Hoplite Gateway v2
 
-OpenAI-совместимый прокси-шлюз с ротацией ключей, дашбордом и авто-восстановлением.
+OpenAI-compatible proxy for Hoplite API with streaming + tool use support.
 
-## Быстрый старт
+## Setup
+pip install -r requirements.txt
 
-```bash
-cd /tmp/hoplite-gateway
-./start.sh
-```
+## Run
+HOPLITE_KEY="hop_gO4kU9_J1vZzL9TcdQhWQZKGTJgHAm4iv__NOWUIWJFMXZ0BtApVRJYe0xJD3uO3" PORT=8091 python3 server.py
 
-Дашборд: http://127.0.0.1:8090/
+## API
+- GET /v1/models - List models
+- POST /v1/chat/completions - Chat (streaming + non-streaming)
+- GET /health - Health check
 
-## API Endpoints
-
-| Метод | Путь | Описание |
-|-------|------|----------|
-| GET | `/health` | Статус шлюза |
-| GET | `/v1/models` | Список моделей (прокси на Hoplite) |
-| POST | `/v1/chat/completions` | Чат-комплишн (прокси на Hoplite) |
-| GET | `/api/keys` | Список ключей |
-| POST | `/api/keys` | Добавить ключ |
-| DELETE | `/api/keys/{id}` | Удалить ключ |
-| POST | `/api/keys/{id}/test` | Проверить ключ |
-| GET | `/api/cards` | Список карт |
-| GET | `/api/github` | GitHub аккаунты |
-| GET | `/api/stats` | Статистика |
-| GET | `/api/events` | SSE-поток событий |
-| GET | `/api/settings` | Настройки |
-
-## Ротация ключей
-
-- Round-robin по живым ключам
-- 3 попытки с exponential backoff перед пометкой "dead"
-- Авто-восстановление: мёртвые ключи перепроверяются
-- 401/403 → мгновенная пометка dead
-
-## Системный сервис
-
-```bash
-sudo systemctl enable --now hoplite-gateway
-sudo systemctl status hoplite-gateway
-```
-
-## Структура
-
-```
-hoplite-gateway/
-├── server.py          # FastAPI-сервер
-├── static/
-│   └── index.html     # Дашборд (dark theme)
-├── data/
-│   └── store.json     # Ключи, карты, GitHub, настройки
-├── autoreg.py         # Авто-регистрация (Playwright)
-├── requirements.txt
-├── start.sh
-└── hoplite-gateway.service
-```
-
-## Порты в системе
-
-| Порт | Сервис |
-|------|--------|
-| 8090 | Hoplite Gateway (этот) |
-| 8080 | Opus Gateway (Sentinel) |
-| 8081 | Hoplite Proxy v5 |
-| 20128 | OmniRoute |
+## Auth
+Header: Authorization: Bearer sk-hop-live

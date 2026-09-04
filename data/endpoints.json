@@ -1,0 +1,23 @@
+[
+  {
+    "id": "ep_default",
+    "name": "Production Hoplite Gateway",
+    "key": "sk-hoplite-gateway",
+    "models": [
+      "*"
+    ],
+    "rate_limit_rpm": 60,
+    "created_at": "2026-09-04T00:00:00Z"
+  },
+  {
+    "id": "ep_f651e92a",
+    "name": "Dev Agent Cluster Key",
+    "key": "sk-hop-7a5558137be34077",
+    "models": [
+      "claude-sonnet-5",
+      "deepseek/deepseek-v4-flash-0731"
+    ],
+    "rate_limit_rpm": 120,
+    "created_at": "2026-09-04T08:17:57Z"
+  }
+]
