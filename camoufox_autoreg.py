@@ -1,73 +1,99 @@
 #!/usr/bin/env python3
-"""
-Camoufox Hoplite Autoreg — bypasses hCaptcha via real browser fingerprint.
-Card: 4147400310554942 (Daniel Dortch) | 06/31 | 693
-Address: 2610 Olivet Church Road, Paducah, KY 42001, US
-"""
-import asyncio, re, requests, time, pyotp, json
+"""Camoufox Autoreg with proxy support - bypass hCaptcha via clean IP + fingerprint."""
+import asyncio, re, requests, time, pyotp, json, sys
+from pathlib import Path
 from camoufox.async_api import AsyncCamoufox
 
 with open(r"C:\Users\User\tmp\hoplite-gateway\data\gh_accounts.json") as f:
     accounts = json.load(f)
 acc = accounts[0]
 
-CARD = {"num": "4147400310554942", "exp": "06/31", "cvv": "693", "name": "Daniel Dortch",
-        "address": "2610 Olivet Church Road", "city": "Paducah", "state": "KY", "zip": "42001", "country": "US"}
+# === CONFIG ===
+CARD_NUM = "372526583853001"  # Brian Garcia
+CARD_EXP = "01/29"
+CARD_CVV = "0544"
+CARD_NAME = "Brian Garcia"
+CARD_ADDR = "2181 W Long Sky Dr"
+CARD_CITY = "East Rachel"
+CARD_STATE = "KS"
+CARD_ZIP = "84770"
 
-async def fill_stripe(page):
-    print("  [*] Filling Stripe fields...")
+# Set proxy here if needed (format: "http://user:pass@ip:port")
+PROXY = None  # or "http://user:pass@1.2.3.4:8080"
+
+ANTI_KEY = "03ea83a89c837abf30695d43a93c0f29"
+
+def solve_captcha(sitekey, pageurl):
+    r = requests.post("https://api.anti-captcha.com/createTask", json={"clientKey": ANTI_KEY, "task": {"type": "HCaptchaTaskProxyless", "websiteURL": pageurl, "websiteKey": sitekey, "isInvisible": True}}, timeout=10).json()
+    tid = r.get("taskId")
+    if not tid: return None
+    for i in range(25):
+        time.sleep(3)
+        res = requests.post("https://api.anti-captcha.com/getTaskResult", json={"clientKey": ANTI_KEY, "taskId": tid}, timeout=10).json()
+        if res.get("status") == "ready":
+            return res.get("solution", {}).get("gRecaptchaResponse")
+    return None
+
+async def fill_and_submit_stripe(page):
+    print("  [*] Filling Stripe form...")
     await page.wait_for_selector("input#cardNumber", timeout=20000)
     await asyncio.sleep(1.5)
-    await page.locator("input#cardNumber").fill(CARD["num"])
-    await page.locator("input#cardExpiry").fill(CARD["exp"])
-    await page.locator("input#cardCvc").fill(CARD["cvv"])
-    await page.locator("input#billingName").fill(CARD["name"])
+    await page.locator("input#cardNumber").fill(CARD_NUM)
+    await page.locator("input#cardExpiry").fill(CARD_EXP)
+    await page.locator("input#cardCvc").fill(CARD_CVV)
+    await page.locator("input#billingName").fill(CARD_NAME)
+    await page.locator("input#billingPostalCode").fill(CARD_ZIP)
     cs = page.locator("select#billingCountry")
     if await cs.count() > 0:
-        await cs.select_option(value="US")
-        await asyncio.sleep(1)
-    # Address
+        await cs.select_option(value="US"); await asyncio.sleep(1)
+    # City + State
     for sel, val in [
-        ("input#billingPostalCode", CARD["zip"]),
-        ("input#billingAddressLine1", CARD["address"]),
-        ("input#billingAddressCity", CARD["city"]),
-        ("input#billingAddressState", CARD["state"]),
-        ("input[autocomplete='address-level2']", CARD["city"]),
-        ("input[autocomplete='address-level1']", CARD["state"]),
-        ("input[autocomplete='postal-code']", CARD["zip"]),
-        ("input[autocomplete='address-line1']", CARD["address"]),
+        ("input#billingAddressCity", CARD_CITY),
+        ("input#billingAddressState", CARD_STATE),
+        ("input[autocomplete='address-level2']", CARD_CITY),
+        ("input[autocomplete='address-level1']", CARD_STATE),
+        ("input[autocomplete='address-line1']", CARD_ADDR),
+        ("input#billingAddressLine1", CARD_ADDR),
     ]:
         el = page.locator(sel)
         if await el.count() > 0:
             await el.first.fill(val)
-    # JS fallback for any remaining fields
-    await page.evaluate(f"""() => {{
-        const inputs = document.querySelectorAll('input');
-        inputs.forEach(el => {{
-            if (el.value) return;
-            const ac = (el.getAttribute('autocomplete')||'').toLowerCase();
-            const ph = (el.placeholder||'').toLowerCase();
-            if (ac.includes('city')||ph.includes('city')) el.value = '{CARD["city"]}';
-            if (ac.includes('address-line1')||ph.includes('address')) el.value = '{CARD["address"]}';
-            if (ac.includes('state')||ph.includes('state')) el.value = '{CARD["state"]}';
-        }});
-    }}""")
-    # Submit
-    btn = page.locator("button[data-testid='hosted-payment-submit-button']")
-    if await btn.count() > 0:
-        await btn.first.click()
-        print("  [+] Payment submitted!")
+
+    # Solve hCaptcha
+    hsk = "24ed0064-62cf-4d42-9960-5dd1a41d4e29"
+    for f in page.frames:
+        if "hcaptcha" in f.url:
+            m = re.search(r"sitekey=([a-zA-Z0-9_-]+)", f.url)
+            if m: hsk = m.group(1); break
+    token = solve_captcha(hsk, page.url)
+    if token:
+        await page.evaluate(f"""() => {{
+            const t = '{token}';
+            ["h-captcha-response","g-recaptcha-response"].forEach(n => {{
+                let el = document.querySelector(`[name="${{n}}"]`);
+                if (!el) {{
+                    el = document.createElement("textarea");
+                    el.name = n; el.style.display = "none";
+                    document.body.appendChild(el);
+                }}
+                el.value = t;
+            }});
+            setTimeout(() => {{
+                document.querySelector("button[data-testid='hosted-payment-submit-button']")?.click();
+            }}, 500);
+        }}""")
+        print("  [+] Captcha solved, payment submitted!")
         return True
     return False
 
 async def main():
-    async with AsyncCamoufox(
-        headless=False,
-        viewport={"width": 1280, "height": 900},
-        os="windows",
-        humanize=True,
-    ) as ctx:
+    launch_kwargs = {"headless": False, "os": "windows", "humanize": True}
+    if PROXY:
+        launch_kwargs["proxy"] = {"server": PROXY}
+
+    async with AsyncCamoufox(**launch_kwargs) as ctx:
         page = await ctx.new_page()
+        await page.set_viewport_size({"width": 1280, "height": 900})
 
         # GitHub
         print("[1] GitHub login...")
@@ -114,33 +140,29 @@ async def main():
 
         # Free plan
         if "stripe.com" in page.url:
-            print("[4] Stripe Free plan (Camoufox - no captcha expected)...")
-            await fill_stripe(page)
-            print("[5] Waiting for redirect...")
+            print("[4] Stripe checkout...")
+            await fill_and_submit_stripe(page)
             for i in range(60):
                 await asyncio.sleep(1)
                 if "hoplite.sh" in page.url and "stripe.com" not in page.url:
                     print(f"  ✅ FREE PLAN ACTIVE! {i+1}s"); break
-                if i == 30: print("  Still waiting...")
-            print(f"  URL: {page.url[:80]}")
 
         # Pro
-        print("[6] Pro upgrade...")
+        print("[5] Pro upgrade...")
         await page.goto("https://app.hoplite.sh/settings/workspace/billing", wait_until="domcontentloaded")
         await asyncio.sleep(4)
         pro = page.locator('button:has-text("Upgrade to Pro"), button:has-text("Start 14 days of Pro")')
         if await pro.count() > 0:
-            print(f"  [+] {await pro.first.inner_text()}")
             await pro.first.click(); await asyncio.sleep(5)
             if "stripe.com" in page.url:
-                await fill_stripe(page)
+                await fill_and_submit_stripe(page)
                 for i in range(60):
                     await asyncio.sleep(1)
                     if "hoplite.sh" in page.url and "stripe.com" not in page.url:
                         print(f"  ✅ PRO PLAN ACTIVE! {i+1}s"); break
 
         # API key
-        print("[7] API key...")
+        print("[6] API key...")
         await page.goto("https://app.hoplite.sh/settings/api-keys", wait_until="domcontentloaded")
         await asyncio.sleep(4)
         html = await page.content()
