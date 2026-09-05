@@ -9,7 +9,7 @@
   "captcha": {
     "provider": "anticaptcha",
     "key": "03ea83a89c837abf30695d43a93c0f29",
-    "balance": 51.91978,
+    "balance": 46.1625,
     "fallback_key": "73531525aa745ed8fd1b4be8c6181c8d"
   },
   "proxies": [],

@@ -36,6 +36,8 @@ import uuid
 import threading
 import subprocess
 from pathlib import Path
+from dotenv import load_dotenv
+load_dotenv(Path(__file__).resolve().parent / ".env")
 from typing import Optional, Tuple, Dict, Any, List
 from collections import defaultdict
 from datetime import datetime
@@ -59,7 +61,7 @@ KEYS_RECORD_PATH = DATA_DIR / "hoplite_keys.json"
 ENDPOINTS_PATH = DATA_DIR / "endpoints.json"
 
 HOPLITE_API = "https://api.hoplite.sh"
-DEFAULT_GATEWAY_KEY = os.environ.get("GATEWAY_KEY", "sk-hoplite-gateway")
+DEFAULT_GATEWAY_KEY = os.environ.get("GATEWAY_KEY", "sk-hop-gateway-8085")
 FALLBACK_PROJECT_ID = os.environ.get("HOPLITE_PROJECT_ID", "proj_2857d93259a84fd9ac7dffe8dbae5330")
 
 # Key rotation lock

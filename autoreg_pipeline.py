@@ -246,8 +246,11 @@ async def fill_stripe_card(page: Page, login: str, label: str = "free") -> bool:
     return False
 
 
-def create_api_key_via_rest(hop_cookies: dict, org_id: str, login: str) -> Optional[str]:
+def create_api_key_via_rest(hop_cookies: dict, org_id, login: str) -> Optional[str]:
     """Directly calls Better-Auth REST API to generate an organization API key."""
+    if not org_id:
+        logger.warning("[API KEY] No org_id, skipping REST creation")
+        return None
     logger.info(f"[API KEY] Generating via Better-Auth REST for org {org_id}...")
     cookie_header = "; ".join(f"{k}={v}" for k, v in hop_cookies.items())
     headers = {
@@ -416,12 +419,19 @@ async def register_account(acc: dict, browser, headless: bool = True) -> Dict[st
         # Step 2: Open Hoplite & OAuth redirect
         # ════════════════════════════════════════════════════════════════
         logger.info(f"[{ts()}] [2/8] Opening Hoplite + GitHub OAuth...")
-        await page.goto(f"{HOPLITE_APP}/login?plan=free&interval=monthly", wait_until="domcontentloaded", timeout=25000)
-        await asyncio.sleep(4)
+        await page.goto(f"{HOPLITE_APP}/login?plan=free&interval=monthly", wait_until="networkidle", timeout=30000)
+        await asyncio.sleep(2)
 
-        btn = page.locator('button[aria-label="Continue with GitHub"], button:has-text("GitHub")')
-        if await btn.count() > 0:
+        # Wait for the page to fully render - check for any button with GitHub text
+        btn = None
+        for sel in ['button[aria-label="Continue with GitHub"]', 'button:has-text("GitHub")', 'button:has-text("github")', 'button:has-text("Continue")']:
+            b = page.locator(sel)
+            if await b.count() > 0:
+                btn = b; break
+
+        if btn:
             await btn.first.click()
+            await asyncio.sleep(2)
         else:
             logger.warning("[!] No GitHub login button found on Hoplite")
             await page.screenshot(path=str(SCREENSHOTS_DIR / f"no_gh_btn_{login}_{ts()}.png"))
@@ -431,9 +441,35 @@ async def register_account(acc: dict, browser, headless: bool = True) -> Dict[st
         # ════════════════════════════════════════════════════════════════
         logger.info(f"[{ts()}] [3/8] Waiting for OAuth consent...")
         oauth_ok = False
+        popup = None
+
+        # Handle popup - listen for new pages
+        async def on_popup(p):
+            nonlocal popup; popup = p
+
+        page.on("popup", on_popup)
+
         for _ in range(30):
             await asyncio.sleep(1)
-            if "authorize" in page.url.lower():
+
+            # Check popup
+            if popup:
+                try:
+                    await popup.wait_for_load_state("networkidle", timeout=10000)
+                    p_url = popup.url.lower()
+                    if "authorize" in p_url or "github.com/login" in p_url:
+                        auth_btn = popup.locator('.js-oauth-authorize-btn, button[name="authorize"], #js-oauth-authorize-btn')
+                        if await auth_btn.count() > 0:
+                            await auth_btn.first.click()
+                            await asyncio.sleep(3)
+                            oauth_ok = True
+                            logger.info("[+] OAuth consent approved via popup")
+                            break
+                except: pass
+                continue
+
+            # Check main page
+            if "authorize" in page.url.lower() or "github.com/login/oauth" in page.url:
                 await asyncio.sleep(2)
                 await page.evaluate("""() => {
                     const b = document.querySelector('.js-oauth-authorize-btn, #js-oauth-authorize-btn, button[name="authorize"]');
@@ -445,6 +481,7 @@ async def register_account(acc: dict, browser, headless: bool = True) -> Dict[st
                 break
             if "hoplite.sh" in page.url and "github.com" not in page.url:
                 oauth_ok = True
+                logger.info("[+] Already on Hoplite (OAuth completed)")
                 break
 
         if not oauth_ok:
@@ -602,23 +639,43 @@ async def register_account(acc: dict, browser, headless: bool = True) -> Dict[st
         cookies = await context.cookies()
         hop_cookies = {c["name"]: c["value"] for c in cookies if "hoplite" in c["domain"]}
         logger.info(f"[+] Hoplite cookies: {list(hop_cookies.keys())}")
+        # Check if we have auth cookies
+        auth_cookies = [k for k in hop_cookies if 'auth' in k.lower() or 'session' in k.lower() or 'token' in k.lower()]
+        if not auth_cookies:
+            logger.warning("[!] No auth cookies found - user may not be logged in")
+            # Try to wait for OAuth redirect a bit more
+            await asyncio.sleep(3)
+            current_url = page.url
+            logger.info(f"[!] Current URL: {current_url[:80]}")
+            cookies2 = await context.cookies()
+            hop_cookies2 = {c["name"]: c["value"] for c in cookies2 if "hoplite" in c["domain"]}
+            if hop_cookies2:
+                hop_cookies = hop_cookies2
+                logger.info(f"[+] Retry cookies: {list(hop_cookies.keys())}")
 
-        cookie_header = "; ".join(f"{k}={v}" for k, v in hop_cookies.items())
-        r_sess = requests.get("https://api.hoplite.sh/api/auth/get-session", headers={
-            "Cookie": cookie_header,
-            "Origin": "https://app.hoplite.sh",
-            "User-Agent": "Mozilla/5.0"
-        }, timeout=10)
-
+        # Try to get session info via HTTP request with all cookies
         org_id = None
         user_id = None
-        if r_sess.status_code == 200:
-            sess_data = r_sess.json()
-            org_id = sess_data.get("session", {}).get("activeOrganizationId")
-            user_id = sess_data.get("session", {}).get("userId")
-            logger.info(f"[+] Session OK: org_id={org_id}, user_id={user_id}")
-        else:
-            logger.warning(f"[!] Session query failed: {r_sess.status_code}")
+        try:
+            cookie_header = "; ".join(f"{k}={v}" for k, v in hop_cookies.items())
+            r_sess = requests.get("https://api.hoplite.sh/api/auth/get-session", headers={
+                "Cookie": cookie_header,
+                "Origin": "https://app.hoplite.sh",
+                "Referer": "https://app.hoplite.sh/",
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+            }, timeout=10)
+            if r_sess.status_code == 200:
+                sess_data = r_sess.json()
+                if isinstance(sess_data, dict):
+                    s = sess_data.get('session') or sess_data.get('data', {}).get('session') or sess_data
+                    if isinstance(s, dict):
+                        org_id = s.get('activeOrganizationId') or s.get('organizationId') or sess_data.get('organizationId')
+                        user_id = s.get('userId') or s.get('user', {}).get('id') or sess_data.get('userId')
+                logger.info(f'[+] Session: org_id={org_id}, user_id={user_id}')
+            else:
+                logger.warning(f'[!] Session HTTP {r_sess.status_code}: {r_sess.text[:200]}')
+        except Exception as e:
+            logger.warning(f'[!] Session error: {e}')
 
         # ════════════════════════════════════════════════════════════════
         # Step 8: Generate API Key
@@ -630,13 +687,36 @@ async def register_account(acc: dict, browser, headless: bool = True) -> Dict[st
 
         if not api_key:
             logger.info("[API KEY] REST creation failed, trying UI fallback...")
-            await page.goto(f"{HOPLITE_APP}/settings/api-keys", wait_until="domcontentloaded", timeout=20000)
-            await asyncio.sleep(4)
-            await page.screenshot(path=str(SCREENSHOTS_DIR / f"api_keys_page_{login}_{ts()}.png"))
-            m = re.search(r'hop_[a-zA-Z0-9_-]{40,}', await page.content())
-            if m:
-                api_key = m.group(0)
-                logger.info(f"[API KEY] Extracted from UI: {api_key[:16]}...{api_key[-6:]}")
+            await page.goto(f"{HOPLITE_APP}/settings/api-keys", wait_until="networkidle", timeout=30000)
+            await asyncio.sleep(3)
+            # Check if we're logged in - look for login page
+            if "Sign In" in await page.title() or "Login" in await page.title() or await page.locator('button:has-text("Sign In")').count() > 0:
+                logger.warning("[!] Not logged in to Hoplite, can't access API keys page")
+            else:
+                await page.screenshot(path=str(SCREENSHOTS_DIR / f"api_keys_page_{login}_{ts()}.png"))
+                # Try to find API key in page content
+                page_html = await page.content()
+                m = re.search(r'hop_[a-zA-Z0-9_-]{40,}', page_html)
+                if m:
+                    api_key = m.group(0)
+                    logger.info(f"[API KEY] Extracted from UI: {api_key[:16]}...{api_key[-6:]}")
+                else:
+                    # Try clicking create button
+                    create_btn = page.locator('button:has-text("Create")')
+                    if await create_btn.count() > 0:
+                        await create_btn.first.click()
+                        await asyncio.sleep(2)
+                        name_input = page.locator('input[placeholder*="name"]')
+                        if await name_input.count() > 0:
+                            await name_input.first.fill(f"{login}-key")
+                            confirm = page.locator('button:has-text("Create"):not(:has-text("Repository"))')
+                            if await confirm.count() > 0:
+                                await confirm.last.click()
+                                await asyncio.sleep(3)
+                                m2 = re.search(r'hop_[a-zA-Z0-9_-]{40,}', await page.content())
+                                if m2:
+                                    api_key = m2.group(0)
+                                    logger.info(f"[API KEY] Created via UI: {api_key[:16]}...{api_key[-6:]}")
 
         if api_key:
             # Query project ID
@@ -741,6 +821,9 @@ async def run_batch(count: int = 3, headless: bool = True):
     store = load_store()
     existing_labels = {k.get("label") for k in store.get("keys", [])}
     pending = [a for a in accounts if a["login"] not in existing_labels]
+    # Skip accounts we've already attempted (to avoid broken OAuth state)
+    attempted = ["TopDeckhandBlock", "GroundPhasePraise", "Hallpatrench"]
+    pending = [a for a in pending if a["login"] not in attempted]
 
     logger.info(f"Total accounts: {len(accounts)}")
     logger.info(f"Already registered: {len(existing_labels)}")
@@ -781,6 +864,33 @@ async def run_batch(count: int = 3, headless: bool = True):
             logger.info(f"    ❌ {r['login']}: {r.get('error', 'unknown')}")
         logger.info("=" * 60)
 
+
+def add_key_to_store(key: str, project_id: Optional[str] = None, label: str = "manual") -> bool:
+    """Validate key against Hoplite API and add to store.json."""
+    try:
+        r = requests.get(f"{HOPLITE_API}/api/projects", headers={"X-Api-Key": key, "Content-Type": "application/json"}, timeout=10)
+        if r.status_code != 200:
+            logger.warning(f"[STORE] Key validation failed: {r.status_code}")
+            return False
+        store = load_store()
+        store["keys"].append({
+            "id": f"hoplite_{label}_{int(time.time())}",
+            "key": key,
+            "projectId": project_id or "proj_2857d93259a84fd9ac7dffe8dbae5330",
+            "label": label,
+            "status": "live",
+            "credits_total": 100,
+            "credits_used": 0,
+            "added_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+            "last_checked": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+        })
+        save_store(store)
+        sync_env_file(store["keys"], project_id)
+        logger.info(f"[STORE] Key {label} added to store")
+        return True
+    except Exception as e:
+        logger.error(f"[STORE] Error adding key: {e}")
+        return False
 
 def main():
     parser = argparse.ArgumentParser(description="Hoplite Autoreg & LiteLLM Pipeline")

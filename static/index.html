@@ -1,819 +1,182 @@
 <!DOCTYPE html>
-<html lang="ru">
+<html lang="en">
 <head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Hoplite LiteLLM Studio & Gateway</title>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Hoplite Gateway</title>
 <style>
-  :root {
-    --bg: #090d16;
-    --surface: #0f172a;
-    --surface-hover: #1e293b;
-    --card: #131d33;
-    --border: #1e2d4d;
-    --border-bright: #334155;
-    --text: #f8fafc;
-    --muted: #94a3b8;
-    --green: #10b981;
-    --green-bg: rgba(16, 185, 129, 0.14);
-    --red: #ef4444;
-    --red-bg: rgba(239, 68, 68, 0.14);
-    --blue: #3b82f6;
-    --blue-bg: rgba(59, 130, 246, 0.14);
-    --purple: #8b5cf6;
-    --purple-bg: rgba(139, 92, 246, 0.14);
-    --amber: #f59e0b;
-    --amber-bg: rgba(245, 158, 11, 0.14);
-    --radius: 10px;
-    --font: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-    --mono: "JetBrains Mono", Consolas, "Courier New", monospace;
-  }
-  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-  body {
-    background: var(--bg);
-    color: var(--text);
-    font-family: var(--font);
-    line-height: 1.5;
-    min-height: 100vh;
-  }
-  header {
-    background: var(--surface);
-    border-bottom: 1px solid var(--border);
-    padding: 14px 28px;
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    position: sticky;
-    top: 0;
-    z-index: 100;
-  }
-  .brand { display: flex; align-items: center; gap: 14px; }
-  .logo-icon {
-    width: 36px; height: 36px;
-    background: linear-gradient(135deg, var(--blue), var(--purple));
-    border-radius: 10px;
-    display: flex; align-items: center; justify-content: center;
-    font-weight: 800; font-size: 18px; color: #fff;
-    box-shadow: 0 0 15px rgba(59,130,246,0.3);
-  }
-  .brand-title { font-size: 1.15rem; font-weight: 700; letter-spacing: -0.01em; }
-  .brand-subtitle { font-size: 0.75rem; color: var(--muted); }
-  
-  .header-badges { display: flex; align-items: center; gap: 12px; }
-  .badge {
-    display: inline-flex; align-items: center; gap: 6px;
-    padding: 6px 14px; border-radius: 20px; font-size: 0.8rem; font-weight: 600;
-    border: 1px solid var(--border);
-  }
-  .badge-live { background: var(--green-bg); color: var(--green); border-color: rgba(16,185,129,0.3); }
-  .badge-captcha { background: var(--purple-bg); color: var(--purple); border-color: rgba(139,92,246,0.3); }
-  .badge-port { background: var(--blue-bg); color: var(--blue); font-family: var(--mono); }
-  .pulse-dot { width: 8px; height: 8px; border-radius: 50%; background: currentColor; }
-
-  /* Navigation Tabs */
-  .nav-tabs {
-    display: flex; gap: 8px;
-    background: var(--surface);
-    padding: 8px 28px;
-    border-bottom: 1px solid var(--border);
-    overflow-x: auto;
-  }
-  .tab-btn {
-    background: transparent; border: none; color: var(--muted);
-    padding: 8px 16px; border-radius: 6px; cursor: pointer;
-    font-size: 0.9rem; font-weight: 600; transition: all 0.2s;
-    display: flex; align-items: center; gap: 8px; white-space: nowrap;
-  }
-  .tab-btn:hover { color: var(--text); background: var(--surface-hover); }
-  .tab-btn.active { color: #fff; background: var(--blue); }
-
-  main { max-width: 1350px; margin: 0 auto; padding: 24px; }
-  .tab-pane { display: none; }
-  .tab-pane.active { display: block; }
-
-  /* Grid Layouts */
-  .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
-  .grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
-  .grid-4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; }
-  .grid-1-2 { display: grid; grid-template-columns: 420px 1fr; gap: 20px; }
-
-  /* Cards */
-  .card {
-    background: var(--card);
-    border: 1px solid var(--border);
-    border-radius: var(--radius);
-    padding: 20px;
-    margin-bottom: 20px;
-  }
-  .card-header {
-    display: flex; justify-content: space-between; align-items: center;
-    margin-bottom: 16px; padding-bottom: 12px; border-bottom: 1px solid var(--border);
-  }
-  .card-title { font-size: 1.05rem; font-weight: 600; display: flex; align-items: center; gap: 8px; }
-
-  /* Forms */
-  .form-group { margin-bottom: 14px; }
-  .form-label { display: block; font-size: 0.8rem; font-weight: 600; color: var(--muted); margin-bottom: 6px; }
-  .form-control {
-    width: 100%; padding: 9px 12px; background: var(--surface);
-    border: 1px solid var(--border); border-radius: 6px;
-    color: var(--text); font-size: 0.88rem; font-family: inherit;
-  }
-  .form-control:focus { outline: none; border-color: var(--blue); box-shadow: 0 0 0 2px var(--blue-bg); }
-  textarea.form-control { font-family: var(--mono); font-size: 0.82rem; resize: vertical; min-height: 85px; }
-
-  /* Buttons */
-  .btn {
-    display: inline-flex; align-items: center; justify-content: center; gap: 8px;
-    padding: 8px 16px; border-radius: 6px; font-weight: 600; font-size: 0.88rem;
-    cursor: pointer; border: 1px solid transparent; transition: all 0.2s;
-  }
-  .btn-primary { background: var(--blue); color: #fff; }
-  .btn-primary:hover { opacity: 0.9; }
-  .btn-success { background: var(--green); color: #fff; }
-  .btn-success:hover { opacity: 0.9; }
-  .btn-danger { background: var(--red); color: #fff; }
-  .btn-danger:hover { opacity: 0.9; }
-  .btn-secondary { background: var(--surface); border-color: var(--border); color: var(--text); }
-  .btn-secondary:hover { background: var(--surface-hover); }
-  .btn-sm { padding: 5px 12px; font-size: 0.8rem; border-radius: 5px; }
-
-  /* Table */
-  .table-responsive { overflow-x: auto; }
-  table { width: 100%; border-collapse: collapse; font-size: 0.88rem; }
-  th { text-align: left; padding: 10px 12px; color: var(--muted); border-bottom: 1px solid var(--border); font-weight: 600; font-size: 0.8rem; }
-  td { padding: 12px; border-bottom: 1px solid var(--border); }
-  tr:hover td { background: rgba(255,255,255,0.02); }
-
-  /* Tags */
-  .tag {
-    display: inline-flex; align-items: center; padding: 2px 8px;
-    border-radius: 4px; font-size: 0.75rem; font-weight: 700; text-transform: uppercase;
-  }
-  .tag-live { background: var(--green-bg); color: var(--green); }
-  .tag-dead { background: var(--red-bg); color: var(--red); }
-  .tag-ready { background: var(--blue-bg); color: var(--blue); }
-
-  /* Terminal */
-  .terminal-box {
-    background: #040711; border: 1px solid #17253d;
-    border-radius: 8px; padding: 12px; height: 260px;
-    overflow-y: auto; font-family: var(--mono); font-size: 0.8rem;
-    color: #38bdf8; line-height: 1.45;
-  }
-  .terminal-line { margin-bottom: 4px; word-break: break-all; }
-  .terminal-line.error { color: #f87171; }
-  .terminal-line.success { color: #4ade80; }
-  .terminal-line.info { color: #94a3b8; }
-
-  /* Chat Box */
-  .chat-box {
-    background: var(--surface); border: 1px solid var(--border);
-    border-radius: 8px; padding: 14px; min-height: 220px; max-height: 380px;
-    overflow-y: auto; font-family: var(--mono); font-size: 0.85rem;
-    white-space: pre-wrap; margin-bottom: 14px;
-  }
-
-  .code-snippet {
-    background: #040711; border: 1px solid var(--border);
-    padding: 14px; border-radius: 6px; font-family: var(--mono);
-    font-size: 0.82rem; color: #a5b4fc; overflow-x: auto;
-  }
-
-  /* Modal */
-  .modal-overlay {
-    position: fixed; inset: 0; background: rgba(0,0,0,0.7);
-    display: none; align-items: center; justify-content: center; z-index: 200;
-  }
-  .modal-overlay.open { display: flex; }
-  .modal {
-    background: var(--card); border: 1px solid var(--border);
-    border-radius: var(--radius); width: 100%; max-width: 520px;
-    padding: 24px; box-shadow: 0 20px 25px -5px rgba(0,0,0,0.5);
-  }
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:#0d1117;color:#c9d1d9;min-height:100vh}
+.header{background:#161b22;border-bottom:1px solid #30363d;padding:16px 24px;display:flex;justify-content:space-between;align-items:center}
+.header h1{font-size:20px;font-weight:600;color:#f0f6fc}
+.header span{color:#8b949e;font-size:14px}
+.status{display:flex;gap:24px;padding:16px 24px;background:#161b22;border-bottom:1px solid #30363d}
+.stat{display:flex;flex-direction:column}
+.stat-label{font-size:12px;color:#8b949e;text-transform:uppercase}
+.stat-value{font-size:18px;font-weight:600;color:#f0f6fc}
+.stat-value.green{color:#3fb950}
+.stat-value.yellow{color:#d29922}
+.stat-value.red{color:#f85149}
+.content{max-width:1200px;margin:0 auto;padding:24px}
+.card{background:#161b22;border:1px solid #30363d;border-radius:6px;padding:16px;margin-bottom:16px}
+.card h2{font-size:16px;font-weight:600;margin-bottom:12px;color:#f0f6fc}
+.card-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px}
+table{width:100%;border-collapse:collapse}
+th,td{text-align:left;padding:8px;border-bottom:1px solid #30363d;font-size:14px}
+th{color:#8b949e;font-weight:600;font-size:12px;text-transform:uppercase}
+td{font-family:'SF Mono','Fira Code',monospace;font-size:13px}
+tr:hover td{background:#1c2128}
+.key-preview{color:#58a6ff}
+.key-status{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:8px}
+.key-status.live{background:#3fb950}
+.key-status.dead{background:#f85149}
+.key-status.expired{background:#d29922}
+.btn{display:inline-flex;align-items:center;gap:6px;padding:6px 14px;border-radius:6px;border:1px solid #30363d;background:#21262d;color:#c9d1d9;font-size:13px;cursor:pointer}
+.btn:hover{background:#30363d}
+.btn.primary{background:#238636;border-color:#238636;color:#fff}
+.btn.primary:hover{background:#2ea043}
+.btn.danger{color:#f85149;border-color:#f85149}
+.btn.danger:hover{background:#f85149;color:#fff}
+.copy-btn{background:transparent;border:none;color:#58a6ff;cursor:pointer;font-size:12px}
+.copy-btn:hover{text-decoration:underline}
+.model-badge{display:inline-block;background:#1f2937;color:#58a6ff;border-radius:4px;padding:2px 6px;font-size:11px;margin:1px}
+input,select{padding:6px 10px;background:#0d1117;border:1px solid #30363d;border-radius:6px;color:#c9d1d9;font-size:14px;width:100%}
+input:focus,select:focus{border-color:#58a6ff;outline:none}
+.form-group{margin-bottom:12px}
+.form-group label{display:block;font-size:12px;margin-bottom:4px;color:#8b949e;text-transform:uppercase}
+.form-row{display:flex;gap:12px}
+.form-row .form-group{flex:1}
+pre{background:#0d1117;border:1px solid #30363d;border-radius:6px;padding:12px;overflow-x:auto;font-size:12px;color:#8b949e}
+.tabs{display:flex;gap:0;border-bottom:1px solid #30363d;margin-bottom:16px}
+.tab{padding:8px 16px;cursor:pointer;color:#8b949e;font-size:14px;border-bottom:2px solid transparent;background:transparent;border-top:none;border-left:none;border-right:none}
+.tab.active{color:#f0f6fc;border-bottom-color:#f78166}
+.tab:hover{color:#f0f6fc}
+.tab-content{display:none}
+.tab-content.active{display:block}
+#toast{position:fixed;bottom:24px;right:24px;background:#238636;color:#fff;padding:12px 20px;border-radius:6px;font-size:14px;opacity:0;transition:opacity .3s;z-index:1000}
+#toast.show{opacity:1}
 </style>
 </head>
 <body>
-
-<header>
-  <div class="brand">
-    <div class="logo-icon">H</div>
-    <div>
-      <div class="brand-title">Hoplite LiteLLM Studio & Gateway</div>
-      <div class="brand-subtitle">LiteLLM-Style Multi-Key Proxy, Virtual Keys & GitHub Account Automation</div>
-    </div>
-  </div>
-  <div class="header-badges">
-    <div class="badge badge-live"><span class="pulse-dot"></span> <span id="hdr-gateway-status">Gateway Live</span></div>
-    <div class="badge badge-captcha">🧩 Anti-Captcha: <span id="hdr-captcha-balance">$51.92</span></div>
-    <div class="badge badge-port">PORT: 8085</div>
-  </div>
-</header>
-
-<div class="nav-tabs">
-  <button class="tab-btn active" onclick="showTab('tab-endpoints')">🔑 Endpoints & Virtual Keys</button>
-  <button class="tab-btn" onclick="showTab('tab-accounts')">🐙 GitHub Accounts Pool</button>
-  <button class="tab-btn" onclick="showTab('tab-upstream')">🛡️ Upstream Hoplite Keys</button>
-  <button class="tab-btn" onclick="showTab('tab-settings')">💳 Billing & Proxies</button>
-  <button class="tab-btn" onclick="showTab('tab-playground')">💬 AI Chat Playground</button>
-  <button class="tab-btn" onclick="showTab('tab-docs')">💻 Code & Integration</button>
+<div class="header">
+  <h1>Hoplite Gateway</h1>
+  <span>v2.0 · <span id="health-status">checking...</span></span>
 </div>
+<div class="status" id="stats-bar">
+  <div class="stat"><span class="stat-label">Live Keys</span><span class="stat-value" id="stat-live">0</span></div>
+  <div class="stat"><span class="stat-label">Total Keys</span><span class="stat-value" id="stat-total">0</span></div>
+  <div class="stat"><span class="stat-label">Accounts</span><span class="stat-value" id="stat-accounts">0</span></div>
+  <div class="stat"><span class="stat-label">Captcha Balance</span><span class="stat-value" id="stat-captcha">$0</span></div>
+  <div class="stat"><span class="stat-label">Autoreg</span><span class="stat-value" id="stat-autoreg">idle</span></div>
+</div>
+<div class="content">
+  <div class="tabs">
+    <button class="tab active" data-tab="keys">Keys</button>
+    <button class="tab" data-tab="accounts">Accounts</button>
+    <button class="tab" data-tab="autoreg">Auto-Reg</button>
+    <button class="tab" data-tab="config">Config</button>
+    <button class="tab" data-tab="endpoints">Endpoints</button>
+  </div>
 
-<main>
-
-  <!-- TAB 1: ENDPOINTS & VIRTUAL KEYS (LiteLLM Style) -->
-  <div id="tab-endpoints" class="tab-pane active">
+  <div id="tab-keys" class="tab-content active">
     <div class="card">
-      <div class="card-header">
-        <div>
-          <div class="card-title">🔑 Virtual API Endpoints (Gateway Keys)</div>
-          <div style="font-size: 0.8rem; color: var(--muted); margin-top: 4px;">
-            Create client-facing API keys like LiteLLM for your apps, teams, and agents.
-          </div>
-        </div>
-        <button class="btn btn-primary" onclick="openCreateEndpointModal()">+ Create New Key</button>
-      </div>
-
-      <div class="table-responsive">
-        <table>
-          <thead>
-            <tr>
-              <th>Name</th>
-              <th>API Key (Bearer)</th>
-              <th>Allowed Models</th>
-              <th>Rate Limit</th>
-              <th>Created</th>
-              <th>Actions</th>
-            </tr>
-          </thead>
-          <tbody id="endpoints-table-body">
-            <tr><td colspan="6" style="text-align:center; color: var(--muted);">Loading endpoints...</td></tr>
-          </tbody>
-        </table>
-      </div>
+      <div class="card-header"><h2>Upstream Hoplite Keys</h2><button class="btn" onclick="refreshKeys()">Refresh</button></div>
+      <table><thead><tr><th>Label</th><th>Key</th><th>Status</th><th>Project</th><th>Added</th><th></th></tr></thead><tbody id="keys-table"></tbody></table>
     </div>
-  </div>
-
-  <!-- TAB 2: GITHUB ACCOUNTS POOL -->
-  <div id="tab-accounts" class="tab-pane">
     <div class="card">
-      <div class="card-header">
-        <div>
-          <div class="card-title">🐙 GitHub Account Pool (<span id="acc-count">172</span> loaded)</div>
-          <div style="font-size: 0.8rem; color: var(--muted); margin-top: 4px;">
-            Select accounts to auto-register on Hoplite with Free & Pro plans and Stripe card automation.
-          </div>
-        </div>
-        <div style="display: flex; gap: 8px;">
-          <button class="btn btn-secondary btn-sm" onclick="selectAllAccounts()">Select All</button>
-          <button class="btn btn-secondary btn-sm" onclick="deselectAllAccounts()">Deselect</button>
-          <button class="btn btn-secondary btn-sm" onclick="openImportAccountsModal()">📥 Bulk Import</button>
-          <button class="btn btn-success btn-sm" onclick="runSelectedAccounts()">▶ Register Selected</button>
-        </div>
-      </div>
-
-      <div style="display: flex; gap: 20px; align-items: center; margin-bottom: 14px; background: var(--surface); padding: 12px; border-radius: 8px;">
-        <div>
-          <label class="form-label" style="margin: 0 0 4px 0;">Selected for Autoreg:</label>
-          <span id="selected-count" style="font-weight: 700; color: var(--blue);">0 accounts</span>
-        </div>
-        <div style="margin-left: auto; display: flex; gap: 12px; align-items: center;">
-          <label style="display: flex; align-items: center; gap: 6px; font-size: 0.85rem; cursor: pointer;">
-            <input type="checkbox" id="run-headful" checked> Show Chrome GUI (bypasses reCAPTCHA)
-          </label>
-          <button class="btn btn-danger btn-sm" id="btn-stop-worker" onclick="stopAutoregWorker()" style="display:none;">⏹ Stop Worker</button>
-        </div>
-      </div>
-
-      <!-- Live Terminal Output -->
-      <div class="terminal-box" id="pipeline-terminal">
-        <div class="terminal-line info">[System] GitHub accounts queue loaded. 172 accounts available.</div>
-      </div>
-
-      <!-- Accounts Table -->
-      <div class="table-responsive" style="max-height: 380px; overflow-y: auto; margin-top: 14px;">
-        <table>
-          <thead>
-            <tr>
-              <th style="width: 40px;"><input type="checkbox" id="chk-master" onchange="toggleMasterCheckbox(this)"></th>
-              <th>Login</th>
-              <th>Email</th>
-              <th>Status</th>
-              <th>Action</th>
-            </tr>
-          </thead>
-          <tbody id="accounts-table-body">
-            <tr><td colspan="5" style="text-align:center; color: var(--muted);">Loading accounts...</td></tr>
-          </tbody>
-        </table>
+      <h2>Add Key</h2>
+      <div class="form-row">
+        <div class="form-group"><label>Key (hop_...)</label><input id="add-key-input" placeholder="hop_..."></div>
+        <div class="form-group"><label>Label</label><input id="add-label-input" placeholder="account-name"></div>
+        <div class="form-group" style="flex:0"><label>&nbsp;</label><button class="btn primary" onclick="addKey()">Add</button></div>
       </div>
     </div>
   </div>
 
-  <!-- TAB 3: UPSTREAM HOPLITE KEYS POOL -->
-  <div id="tab-upstream" class="tab-pane">
-    <div class="grid-3" style="margin-bottom: 20px;">
-      <div class="card" style="margin: 0;">
-        <div class="card-title">🔑 Live Keys in Pool</div>
-        <div style="font-size: 2rem; font-weight: 700; color: var(--green); margin-top: 8px;" id="stat-upstream-live">1</div>
-        <div style="font-size: 0.8rem; color: var(--muted);">Rotated round-robin on every request</div>
-      </div>
-      <div class="card" style="margin: 0;">
-        <div class="card-title">⚡ Default Project</div>
-        <div style="font-size: 1.1rem; font-weight: 600; color: var(--purple); margin-top: 14px; font-family: var(--mono);" id="stat-upstream-proj">proj_2857d93...</div>
-        <div style="font-size: 0.8rem; color: var(--muted);">Active project sandbox</div>
-      </div>
-      <div class="card" style="margin: 0;">
-        <div class="card-title">🤖 Upstream Models</div>
-        <div style="font-size: 2rem; font-weight: 700; color: var(--blue); margin-top: 8px;" id="stat-upstream-models">16</div>
-        <div style="font-size: 0.8rem; color: var(--muted);">Claude, GPT, DeepSeek, GLM, Kimi</div>
-      </div>
-    </div>
-
+  <div id="tab-accounts" class="tab-content">
     <div class="card">
-      <div class="card-header">
-        <div class="card-title">🛡️ Registered Hoplite Accounts & API Keys</div>
-        <div>
-          <button class="btn btn-secondary btn-sm" onclick="loadUpstreamKeys()">🔄 Refresh</button>
-          <button class="btn btn-primary btn-sm" onclick="openAddKeyModal()">+ Ingest Key</button>
-        </div>
-      </div>
-      <div class="table-responsive">
-        <table>
-          <thead>
-            <tr>
-              <th>Account Label</th>
-              <th>API Key</th>
-              <th>Project ID</th>
-              <th>Status</th>
-              <th>Credits</th>
-              <th>Actions</th>
-            </tr>
-          </thead>
-          <tbody id="upstream-table-body">
-            <tr><td colspan="6" style="text-align:center; color: var(--muted);">Loading upstream keys...</td></tr>
-          </tbody>
-        </table>
-      </div>
+      <div class="card-header"><h2>GitHub Accounts</h2><button class="btn" onclick="refreshAccounts()">Refresh</button></div>
+      <table><thead><tr><th>Login</th><th>Email</th><th>Status</th></tr></thead><tbody id="accounts-table"></tbody></table>
     </div>
   </div>
 
-  <!-- TAB 4: BILLING & PROXY SETTINGS -->
-  <div id="tab-settings" class="tab-pane">
-    <div class="grid-2">
-      
-      <!-- Card Settings -->
-      <div class="card">
-        <div class="card-header">
-          <div class="card-title">💳 Stripe Billing Card (Auto-Fill)</div>
-          <button class="btn btn-primary btn-sm" onclick="saveCardConfig()">Save Card</button>
-        </div>
-        <div class="form-group">
-          <label class="form-label">Card Number</label>
-          <input type="text" id="cfg-card-num" class="form-control" value="4874100085748500">
-        </div>
-        <div style="display:grid; grid-template-columns: 1fr 1fr; gap: 10px;">
-          <div class="form-group">
-            <label class="form-label">Expiry (MM/YY)</label>
-            <input type="text" id="cfg-card-exp" class="form-control" value="05/30">
-          </div>
-          <div class="form-group">
-            <label class="form-label">CVV</label>
-            <input type="text" id="cfg-card-cvv" class="form-control" value="674">
-          </div>
-        </div>
-        <div style="display:grid; grid-template-columns: 1fr 1fr; gap: 10px;">
-          <div class="form-group">
-            <label class="form-label">Postal / ZIP</label>
-            <input type="text" id="cfg-card-zip" class="form-control" value="10001">
-          </div>
-          <div class="form-group">
-            <label class="form-label">Country</label>
-            <input type="text" id="cfg-card-country" class="form-control" value="US">
-          </div>
-        </div>
-        <div style="font-size: 0.78rem; color: var(--muted);">
-          * Automatically filled on Stripe Checkout during Free and Pro plan activation.
-        </div>
-      </div>
-
-      <!-- Captcha & Proxy Settings -->
-      <div>
-        <div class="card">
-          <div class="card-header">
-            <div class="card-title">🧩 Captcha Solvers ($1265+ Pool)</div>
-            <button class="btn btn-secondary btn-sm" onclick="refreshCaptchaBalance()">Check Balance</button>
-          </div>
-          <div class="form-group">
-            <label class="form-label">Provider</label>
-            <select id="cfg-captcha-prov" class="form-control">
-              <option value="anticaptcha" selected>Anti-Captcha (Live Balance: $51.92)</option>
-              <option value="twocaptcha">2Captcha (Verified Pool: $1034.32)</option>
-              <option value="capsolver">CapSolver</option>
-            </select>
-          </div>
-          <div class="form-group">
-            <label class="form-label">API Key</label>
-            <input type="text" id="cfg-captcha-key" class="form-control" value="03ea83a89c837abf30695d43a93c0f29">
-          </div>
-        </div>
-
-        <div class="card">
-          <div class="card-header">
-            <div class="card-title">🌐 Proxy Pool</div>
-            <button class="btn btn-primary btn-sm" onclick="saveProxyConfig()">Save Proxies</button>
-          </div>
-          <div class="form-group">
-            <label class="form-label">Proxies (ip:port or http://user:pass@ip:port, one per line)</label>
-            <textarea id="cfg-proxies" class="form-control" placeholder="127.0.0.1:8080&#10;http://user:pass@1.2.3.4:1080"></textarea>
-          </div>
-          <div class="form-group">
-            <label class="form-label">Strategy</label>
-            <select id="cfg-proxy-strat" class="form-control">
-              <option value="direct" selected>Direct (No Proxy)</option>
-              <option value="round-robin">Round Robin</option>
-              <option value="random">Random</option>
-            </select>
-          </div>
-        </div>
-      </div>
-
-    </div>
-  </div>
-
-  <!-- TAB 5: AI PLAYGROUND -->
-  <div id="tab-playground" class="tab-pane">
+  <div id="tab-autoreg" class="tab-content">
     <div class="card">
-      <div class="card-header">
-        <div class="card-title">💬 Interactive AI Chat Playground</div>
-        <div style="font-size: 0.8rem; color: var(--muted);">Testing through gateway: <code style="color:var(--blue);">http://localhost:8085/v1/chat/completions</code></div>
+      <h2>Auto-Registration Pipeline</h2>
+      <div class="form-row" style="margin-bottom:12px">
+        <div class="form-group"><label>Accounts to register</label><input id="autoreg-count" type="number" value="3" min="1" max="10"></div>
+        <div class="form-group" style="flex:0"><label>&nbsp;</label><button class="btn primary" onclick="startAutoreg()">Start</button></div>
+        <div class="form-group" style="flex:0"><label>&nbsp;</label><button class="btn danger" onclick="stopAutoreg()">Stop</button></div>
       </div>
-      
-      <div style="display: grid; grid-template-columns: 280px 1fr; gap: 20px;">
-        <div>
-          <div class="form-group">
-            <label class="form-label">Model</label>
-            <select id="play-model" class="form-control">
-              <option value="deepseek/deepseek-v4-flash-0731" selected>deepseek/deepseek-v4-flash-0731</option>
-              <option value="claude-sonnet-5">claude-sonnet-5</option>
-              <option value="claude-opus-5">claude-opus-5</option>
-              <option value="claude-haiku-4-5">claude-haiku-4-5</option>
-              <option value="gpt-5.6-terra">gpt-5.6-terra</option>
-              <option value="gpt-5.6-sol">gpt-5.6-sol</option>
-              <option value="gpt-4o">gpt-4o</option>
-              <option value="z-ai/glm-5.3">z-ai/glm-5.3</option>
-              <option value="moonshotai/kimi-k3">moonshotai/kimi-k3</option>
-            </select>
-          </div>
-          <div class="form-group">
-            <label class="form-label">System Instruction</label>
-            <input type="text" id="play-system" class="form-control" value="You are a helpful AI assistant.">
-          </div>
-          <div class="form-group">
-            <label class="form-label">Temperature</label>
-            <input type="number" id="play-temp" class="form-control" value="0.7" step="0.1" min="0" max="1">
-          </div>
-          <button class="btn btn-primary" style="width: 100%; margin-top: 10px;" id="btn-play-send" onclick="sendPlaygroundChat()">Send Message</button>
-        </div>
-
-        <div>
-          <div class="form-group">
-            <label class="form-label">User Prompt</label>
-            <textarea id="play-prompt" class="form-control" rows="3">Say 'Hoplite LiteLLM Gateway is 100% functional!'</textarea>
-          </div>
-          <div class="form-label">Response Stream</div>
-          <div class="chat-box" id="play-output">// Assistant response will appear here...</div>
-        </div>
-      </div>
+      <pre id="autoreg-log">No autoreg jobs running.</pre>
     </div>
   </div>
 
-  <!-- TAB 6: CODE & INTEGRATION -->
-  <div id="tab-docs" class="tab-pane">
+  <div id="tab-config" class="tab-content">
     <div class="card">
-      <div class="card-title" style="margin-bottom: 12px;">💻 Connect Your Applications (OpenAI SDK / LiteLLM)</div>
-      
-      <div class="form-label">Python (OpenAI SDK)</div>
-      <pre class="code-snippet">from openai import OpenAI
-
-client = OpenAI(
-    base_url="http://localhost:8085/v1",
-    api_key="sk-hoplite-gateway"
-)
-
-response = client.chat.completions.create(
-    model="claude-sonnet-5",
-    messages=[{"role": "user", "content": "Hello!"}],
-    stream=True
-)
-
-for chunk in response:
-    print(chunk.choices[0].delta.content or "", end="")</pre>
-
-      <div class="form-label" style="margin-top: 16px;">LiteLLM config.yaml</div>
-      <pre class="code-snippet">model_list:
-  - model_name: hoplite-claude
-    litellm_params:
-      model: openai/claude-sonnet-5
-      api_base: http://localhost:8085/v1
-      api_key: sk-hoplite-gateway
-
-  - model_name: hoplite-deepseek
-    litellm_params:
-      model: openai/deepseek/deepseek-v4-flash-0731
-      api_base: http://localhost:8085/v1
-      api_key: sk-hoplite-gateway</pre>
+      <h2>Settings</h2>
+      <div class="form-row">
+        <div class="form-group"><label>Card Number</label><input id="cfg-card" value="4874100085748500"></div>
+        <div class="form-group"><label>Expiry</label><input id="cfg-exp" value="05/30"></div>
+        <div class="form-group"><label>CVV</label><input id="cfg-cvv" value="674"></div>
+        <div class="form-group"><label>ZIP</label><input id="cfg-zip" value="10001"></div>
+      </div>
+      <div class="form-row">
+        <div class="form-group"><label>Anti-Captcha Key</label><input id="cfg-captcha" value="03ea83a89c837abf30695d43a93c0f29"></div>
+        <div class="form-group" style="flex:0"><label>&nbsp;</label><button class="btn primary" onclick="saveConfig()">Save</button></div>
+      </div>
     </div>
   </div>
 
-</main>
-
-<!-- MODAL: CREATE VIRTUAL ENDPOINT KEY -->
-<div class="modal-overlay" id="modal-endpoint">
-  <div class="modal">
-    <div class="card-title" style="margin-bottom: 16px;">Create Virtual Gateway Key</div>
-    <div class="form-group">
-      <label class="form-label">Key Name / Description</label>
-      <input type="text" id="new-ep-name" class="form-control" placeholder="e.g. My App / Dev Team">
+  <div id="tab-endpoints" class="tab-content">
+    <div class="card">
+      <div class="card-header"><h2>Virtual Endpoints</h2><button class="btn" onclick="refreshEndpoints()">Refresh</button></div>
+      <table><thead><tr><th>Name</th><th>Key</th><th>Models</th><th>RPM</th><th></th></tr></thead><tbody id="endpoints-table"></tbody></table>
     </div>
-    <div class="form-group">
-      <label class="form-label">Rate Limit (Requests per minute)</label>
-      <input type="number" id="new-ep-rpm" class="form-control" value="60">
-    </div>
-    <div style="display:flex; justify-content: flex-end; gap: 8px; margin-top: 20px;">
-      <button class="btn btn-secondary" onclick="closeModal('modal-endpoint')">Cancel</button>
-      <button class="btn btn-primary" onclick="submitCreateEndpoint()">Generate Key</button>
+    <div class="card">
+      <h2>Create Endpoint</h2>
+      <div class="form-row">
+        <div class="form-group"><label>Name</label><input id="ep-name" placeholder="My Key"></div>
+        <div class="form-group"><label>RPM Limit</label><input id="ep-rpm" type="number" value="60"></div>
+        <div class="form-group" style="flex:0"><label>&nbsp;</label><button class="btn primary" onclick="createEndpoint()">Create</button></div>
+      </div>
     </div>
   </div>
 </div>
-
-<!-- MODAL: BULK IMPORT GITHUB ACCOUNTS -->
-<div class="modal-overlay" id="modal-import-accounts">
-  <div class="modal">
-    <div class="card-title" style="margin-bottom: 16px;">📥 Bulk Import GitHub Accounts</div>
-    <div class="form-group">
-      <label class="form-label">Paste accounts (email:password:totp:login, one per line)</label>
-      <textarea id="import-accounts-text" class="form-control" style="min-height: 180px;" placeholder="mymail@gmail.com:Pass123:TOTPSECRET:MyLogin"></textarea>
-    </div>
-    <div style="display:flex; justify-content: flex-end; gap: 8px; margin-top: 20px;">
-      <button class="btn btn-secondary" onclick="closeModal('modal-import-accounts')">Cancel</button>
-      <button class="btn btn-primary" onclick="submitImportAccounts()">Import Accounts</button>
-    </div>
-  </div>
-</div>
-
+<div id="toast"></div>
 <script>
-let selectedLogins = new Set();
+function toast(msg){const t=document.getElementById('toast');t.textContent=msg;t.classList.add('show');setTimeout(()=>t.classList.remove('show'),3000)}
 
-function showTab(tabId) {
-  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
-  document.querySelectorAll('.tab-pane').forEach(p => p.classList.remove('active'));
-  event.currentTarget.classList.add('active');
-  document.getElementById(tabId).classList.add('active');
-}
+async function api(path,opts={}){try{const r=await fetch(path,{headers:{'Content-Type':'application/json'},...opts});return await r.json()}catch(e){toast('API error: '+e.message);return null}}
 
-function openModal(id) { document.getElementById(id).classList.add('open'); }
-function closeModal(id) { document.getElementById(id).classList.remove('open'); }
+async function refreshHealth(){const h=await api('/health');document.getElementById('health-status').textContent=h?.status||'down'}
 
-function logTerminal(text, type='info') {
-  const box = document.getElementById('pipeline-terminal');
-  const d = document.createElement('div');
-  d.className = 'terminal-line ' + type;
-  d.textContent = `[${new Date().toLocaleTimeString()}] ${text}`;
-  box.appendChild(d);
-  box.scrollTop = box.scrollHeight;
-}
+async function refreshStats(){const k=await api('/api/keys');if(!k)return;const live=k.keys?.filter(x=>x.status==='live').length||0;const a=await api('/api/accounts');const cap=await api('/api/captcha/balance');const auto=await api('/api/autoreg/status');document.getElementById('stat-live').textContent=live;document.getElementById('stat-total').textContent=k.total||0;document.getElementById('stat-accounts').textContent=a?.total||0;document.getElementById('stat-captcha').textContent='$'+(cap?.balance||0);document.getElementById('stat-autoreg').textContent=auto?.running?'running':'idle';document.getElementById('stat-autoreg').className='stat-value'+(auto?.running?' green':'')}
 
-// ── Virtual Endpoints ──
-async function loadEndpoints() {
-  try {
-    const res = await fetch('/api/endpoints');
-    const data = await res.json();
-    const tbody = document.getElementById('endpoints-table-body');
-    tbody.innerHTML = '';
-    
-    data.endpoints.forEach(ep => {
-      const tr = document.createElement('tr');
-      tr.innerHTML = `
-        <td><strong>${ep.name}</strong></td>
-        <td><code>${ep.key}</code></td>
-        <td><span class="tag tag-ready">${ep.models.join(', ')}</span></td>
-        <td>${ep.rate_limit_rpm} RPM</td>
-        <td style="color:var(--muted); font-size:0.75rem;">${ep.created_at || 'n/a'}</td>
-        <td><button class="btn btn-danger btn-sm" onclick="deleteEndpoint('${ep.id}')">Revoke</button></td>
-      `;
-      tbody.appendChild(tr);
-    });
-  } catch (e) {
-    console.error('loadEndpoints', e);
-  }
-}
+async function refreshKeys(){const d=await api('/api/keys');if(!d)return;const tbody=document.getElementById('keys-table');tbody.innerHTML='';d.keys?.forEach(k=>{tbody.innerHTML+=`<tr><td>${k.label||'?'}</td><td><span class="key-preview">${k.key?.slice(0,16)}...${k.key?.slice(-6)}</span> <button class="copy-btn" onclick="navigator.clipboard.writeText('${k.key}');toast('Copied!')">copy</button></td><td><span class="key-status ${k.status}"></span>${k.status}</td><td style="color:#8b949e;font-size:12px">${k.projectId?.slice(0,20)||'-'}</td><td style="color:#8b949e;font-size:12px">${k.added_at?.slice(0,10)||'-'}</td><td><button class="btn danger" onclick="deleteKey('${k.id}')">x</button></td></tr>`})}
 
-function openCreateEndpointModal() { openModal('modal-endpoint'); }
-async function submitCreateEndpoint() {
-  const name = document.getElementById('new-ep-name').value;
-  const rpm = document.getElementById('new-ep-rpm').value;
-  await fetch('/api/endpoints', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ name, rate_limit_rpm: parseInt(rpm) })
-  });
-  closeModal('modal-endpoint');
-  loadEndpoints();
-}
+async function refreshAccounts(){const d=await api('/api/accounts');if(!d)return;const tbody=document.getElementById('accounts-table');tbody.innerHTML='';d.accounts?.forEach(a=>{tbody.innerHTML+=`<tr><td>${a.login}</td><td>${a.email}</td><td><span class="key-status ${a.status==='ok'?'live':a.status==='Ready'?'':'dead'}"></span>${a.status}</td></tr>`})}
 
-async function deleteEndpoint(id) {
-  if (!confirm('Revoke this virtual API key?')) return;
-  await fetch(`/api/endpoints/${id}`, { method: 'DELETE' });
-  loadEndpoints();
-}
+async function refreshEndpoints(){const d=await api('/api/endpoints');if(!d)return;const tbody=document.getElementById('endpoints-table');tbody.innerHTML='';d.endpoints?.forEach(e=>{tbody.innerHTML+=`<tr><td>${e.name}</td><td><span class="key-preview">${e.key?.slice(0,8)}...${e.key?.slice(-4)}</span></td><td>${(e.models||['*']).map(m=>`<span class="model-badge">${m}</span>`).join('')}</td><td>${e.rate_limit_rpm||60}</td><td><button class="btn danger" onclick="deleteEndpoint('${e.id}')">x</button></td></tr>`})}
 
-// ── GitHub Accounts ──
-async function loadAccounts() {
-  try {
-    const res = await fetch('/api/accounts');
-    const data = await res.json();
-    document.getElementById('acc-count').textContent = data.total || 0;
-    const tbody = document.getElementById('accounts-table-body');
-    tbody.innerHTML = '';
-    
-    data.accounts.forEach(a => {
-      const tr = document.createElement('tr');
-      const isOk = a.status === 'ok';
-      const isChecked = selectedLogins.has(a.login);
-      tr.innerHTML = `
-        <td><input type="checkbox" ${isChecked ? 'checked' : ''} onchange="toggleAccountSelect('${a.login}', this.checked)"></td>
-        <td><strong>${a.login}</strong></td>
-        <td>${a.email}</td>
-        <td><span class="tag ${isOk ? 'tag-live' : 'tag-ready'}">${a.status}</span></td>
-        <td><button class="btn btn-secondary btn-sm" onclick="runSingleAccount('${a.login}')">Register</button></td>
-      `;
-      tbody.appendChild(tr);
-    });
-    updateSelectedCount();
-  } catch (e) {
-    console.error('loadAccounts', e);
-  }
-}
+async function addKey(){const key=document.getElementById('add-key-input').value;const label=document.getElementById('add-label-input').value;if(!key){toast('Enter a key');return}const r=await api('/api/keys',{method:'POST',body:JSON.stringify({key,label})});toast(r?.success?'Key added':r?.error||'Failed');refreshKeys();refreshStats()}
 
-function toggleAccountSelect(login, checked) {
-  if (checked) selectedLogins.add(login);
-  else selectedLogins.delete(login);
-  updateSelectedCount();
-}
+async function deleteKey(id){if(!confirm('Delete this key?'))return;await api(`/api/keys/${id}`,{method:'DELETE'});refreshKeys();refreshStats()}
 
-function toggleMasterCheckbox(master) {
-  const cbs = document.querySelectorAll('#accounts-table-body input[type="checkbox"]');
-  cbs.forEach(cb => {
-    cb.checked = master.checked;
-    const login = cb.closest('tr').querySelector('strong').textContent;
-    if (master.checked) selectedLogins.add(login);
-    else selectedLogins.delete(login);
-  });
-  updateSelectedCount();
-}
+async function createEndpoint(){const name=document.getElementById('ep-name').value||'Custom Key';const rpm=parseInt(document.getElementById('ep-rpm').value)||60;const r=await api('/api/endpoints',{method:'POST',body:JSON.stringify({name,rate_limit_rpm:rpm})});toast(r?.success?'Endpoint created':r?.error||'Failed');refreshEndpoints()}
 
-function selectAllAccounts() {
-  document.getElementById('chk-master').checked = true;
-  toggleMasterCheckbox({ checked: true });
-}
+async function deleteEndpoint(id){if(!confirm('Delete this endpoint?'))return;await api(`/api/endpoints/${id}`,{method:'DELETE'});refreshEndpoints()}
 
-function deselectAllAccounts() {
-  document.getElementById('chk-master').checked = false;
-  toggleMasterCheckbox({ checked: false });
-}
+async function startAutoreg(){const count=parseInt(document.getElementById('autoreg-count').value)||3;const r=await api('/api/autoreg/start',{method:'POST',body:JSON.stringify({count,headful:true})});toast(r?.message||'Started');refreshStats();document.getElementById('autoreg-log').textContent='Autoreg starting...\nCheck terminal for output.'}
 
-function updateSelectedCount() {
-  document.getElementById('selected-count').textContent = `${selectedLogins.size} accounts`;
-}
+async function stopAutoreg(){const r=await api('/api/autoreg/stop',{method:'POST'});toast(r?.message||'Stopped');refreshStats()}
 
-function openImportAccountsModal() { openModal('modal-import-accounts'); }
-async function submitImportAccounts() {
-  const text = document.getElementById('import-accounts-text').value;
-  const res = await fetch('/api/accounts/import', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ text })
-  });
-  const data = await res.json();
-  alert(`Imported ${data.added} accounts (Total: ${data.total})`);
-  closeModal('modal-import-accounts');
-  loadAccounts();
-}
+async function saveConfig(){const card=document.getElementById('cfg-card').value;const exp=document.getElementById('cfg-exp').value;const cvv=document.getElementById('cfg-cvv').value;const zip=document.getElementById('cfg-zip').value;const captcha=document.getElementById('cfg-captcha').value;const r=await api('/api/config',{method:'POST',body:JSON.stringify({card:{number:card,expiry:exp,cvv:cvv,zip:zip},captcha:{provider:'anticaptcha',key:captcha}})});toast(r?.success?'Config saved':'Failed');refreshStats()}
 
-// ── Upstream Keys ──
-async function loadUpstreamKeys() {
-  try {
-    const res = await fetch('/api/keys');
-    const data = await res.json();
-    document.getElementById('stat-upstream-live').textContent = data.live_count || 0;
-    const tbody = document.getElementById('upstream-table-body');
-    tbody.innerHTML = '';
-    
-    data.keys.forEach(k => {
-      const tr = document.createElement('tr');
-      const isLive = k.status === 'live';
-      tr.innerHTML = `
-        <td><strong>${k.label}</strong></td>
-        <td><code>${k.key.substring(0,14)}...${k.key.slice(-4)}</code></td>
-        <td><code>${k.projectId || 'none'}</code></td>
-        <td><span class="tag ${isLive ? 'tag-live' : 'tag-dead'}">${k.status}</span></td>
-        <td>${k.credits_used || 0}</td>
-        <td>
-          <button class="btn btn-secondary btn-sm" onclick="testUpstreamKey('${k.key}')">Test</button>
-          <button class="btn btn-danger btn-sm" onclick="deleteUpstreamKey('${k.id}')">Remove</button>
-        </td>
-      `;
-      tbody.appendChild(tr);
-    });
-  } catch (e) {
-    console.error('loadUpstreamKeys', e);
-  }
-}
+document.querySelectorAll('.tab').forEach(t=>{t.addEventListener('click',()=>{document.querySelectorAll('.tab').forEach(x=>x.classList.remove('active'));document.querySelectorAll('.tab-content').forEach(x=>x.classList.remove('active'));t.classList.add('active');document.getElementById('tab-'+t.dataset.tab).classList.add('active')})});
 
-// ── Autoreg Worker ──
-async function runSelectedAccounts() {
-  const count = selectedLogins.size > 0 ? selectedLogins.size : 3;
-  const headful = document.getElementById('run-headful').checked;
-  logTerminal(`Starting autoreg worker for ${count} accounts (GUI: ${headful})...`, 'info');
-  document.getElementById('btn-stop-worker').style.display = 'inline-flex';
-  
-  await fetch('/api/autoreg/start', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ count, headful, logins: Array.from(selectedLogins) })
-  });
-  logTerminal('Worker process started in background. Monitor live execution.', 'success');
-}
-
-async function stopAutoregWorker() {
-  await fetch('/api/autoreg/stop', { method: 'POST' });
-  document.getElementById('btn-stop-worker').style.display = 'none';
-  logTerminal('Worker stopped.', 'info');
-}
-
-// ── Playground Chat ──
-async function sendPlaygroundChat() {
-  const btn = document.getElementById('btn-play-send');
-  const out = document.getElementById('play-output');
-  const model = document.getElementById('play-model').value;
-  const prompt = document.getElementById('play-prompt').value;
-  const system = document.getElementById('play-system').value;
-  
-  btn.disabled = true;
-  out.textContent = 'Generating...';
-  
-  try {
-    const res = await fetch('/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': 'Bearer sk-hoplite-gateway'
-      },
-      body: JSON.stringify({
-        model: model,
-        messages: [{ role: 'system', content: system }, { role: 'user', content: prompt }]
-      })
-    });
-    const data = await res.json();
-    out.textContent = data.choices ? data.choices[0].message.content : JSON.stringify(data, null, 2);
-  } catch (e) {
-    out.textContent = 'Error: ' + e.message;
-  } finally {
-    btn.disabled = false;
-  }
-}
-
-// ── Settings ──
-async function saveCardConfig() {
-  const card = {
-    number: document.getElementById('cfg-card-num').value,
-    expiry: document.getElementById('cfg-card-exp').value,
-    cvv: document.getElementById('cfg-card-cvv').value,
-    zip: document.getElementById('cfg-card-zip').value,
-    country: document.getElementById('cfg-card-country').value
-  };
-  await fetch('/api/config', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ card })
-  });
-  alert('Card configuration saved!');
-}
-
-async function refreshCaptchaBalance() {
-  const res = await fetch('/api/captcha/balance');
-  const data = await res.json();
-  document.getElementById('hdr-captcha-balance').textContent = `$${data.balance.toFixed(2)}`;
-  alert(`Active Captcha Provider: ${data.provider}\nLive Balance: $${data.balance.toFixed(2)}`);
-}
-
-// Init
-window.addEventListener('DOMContentLoaded', () => {
-  loadEndpoints();
-  loadAccounts();
-  loadUpstreamKeys();
-});
+refreshHealth();refreshStats();refreshKeys();refreshAccounts();refreshEndpoints();
+setInterval(()=>{refreshHealth();refreshStats();refreshKeys()},15000);
 </script>
 </body>
 </html>
