@@ -12,7 +12,11 @@
     "balance": 46.1625,
     "fallback_key": "73531525aa745ed8fd1b4be8c6181c8d"
   },
-  "proxies": [],
+  "proxies": [
+    "http://bpuser-ZFTQyIdO:G4vXKXt8cSmFRPp8qazW_hardsession-A0jSBEjo@residential-x.bpproxy.at:1000",
+    "http://bpuser-ZFTQyIdO:nP2iPVEDGg6KgHVKi5UR_hardsession-ETAvi6HI@datacenter-x.bpproxy.at:2000",
+    "http://bpuser-a9G259K6:nIFjyoEdagionBA28TG0_hardsession-Yqdx8aNz@residential-x.bpproxy.at:1000"
+  ],
   "proxy_strategy": "round-robin",
   "gateway": {
     "port": 8085,
@@ -21,7 +25,7 @@
     "max_concurrent": 5
   },
   "autoreg": {
-    "headless": true,
+    "headless": false,
     "batch_size": 5,
     "use_chrome": true
   }

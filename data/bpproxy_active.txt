@@ -1,0 +1,3 @@
+http://bpuser-ZFTQyIdO:G4vXKXt8cSmFRPp8qazW_hardsession-A0jSBEjo@residential-x.bpproxy.at:1000
+http://bpuser-ZFTQyIdO:nP2iPVEDGg6KgHVKi5UR_hardsession-ETAvi6HI@datacenter-x.bpproxy.at:2000
+http://bpuser-a9G259K6:nIFjyoEdagionBA28TG0_hardsession-Yqdx8aNz@residential-x.bpproxy.at:1000
